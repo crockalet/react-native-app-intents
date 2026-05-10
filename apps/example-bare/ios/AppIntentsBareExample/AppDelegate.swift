@@ -1,4 +1,5 @@
 import UIKit
+import AppIntents
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
@@ -29,6 +30,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       in: window,
       launchOptions: launchOptions
     )
+
+    if #available(iOS 16.0, *) {
+      ExampleAppShortcuts.updateAppShortcutParameters()
+    }
 
     return true
   }

@@ -4,7 +4,23 @@
 
 static NSMutableArray<NSString *> *ReactNativeAppIntentsPendingURLs = nil;
 static __weak ReactNativeAppIntents *ReactNativeAppIntentsCurrentModule = nil;
+static NSString *const ReactNativeAppIntentsAppGroupInfoKey = @"ReactNativeAppIntentsAppGroupIdentifier";
 static NSString *const ReactNativeAppIntentsPendingURLsDefaultsKey = @"ReactNativeAppIntentsPendingURLs";
+
+static NSUserDefaults *ReactNativeAppIntentsUserDefaults(void)
+{
+  id suiteName = [[NSBundle mainBundle] objectForInfoDictionaryKey:ReactNativeAppIntentsAppGroupInfoKey];
+
+  if ([suiteName isKindOfClass:[NSString class]] && [(NSString *)suiteName length] > 0) {
+    NSUserDefaults *sharedDefaults = [[NSUserDefaults alloc] initWithSuiteName:(NSString *)suiteName];
+
+    if (sharedDefaults != nil) {
+      return sharedDefaults;
+    }
+  }
+
+  return [NSUserDefaults standardUserDefaults];
+}
 
 static void ReactNativeAppIntentsEnsurePendingQueue(void)
 {
@@ -16,7 +32,7 @@ static void ReactNativeAppIntentsEnsurePendingQueue(void)
 static void ReactNativeAppIntentsImportPersistedPendingURLs(void)
 {
   NSArray<NSString *> *persistedURLs =
-    [[NSUserDefaults standardUserDefaults] stringArrayForKey:ReactNativeAppIntentsPendingURLsDefaultsKey];
+    [ReactNativeAppIntentsUserDefaults() stringArrayForKey:ReactNativeAppIntentsPendingURLsDefaultsKey];
 
   if (persistedURLs.count == 0) {
     return;
@@ -24,7 +40,7 @@ static void ReactNativeAppIntentsImportPersistedPendingURLs(void)
 
   ReactNativeAppIntentsEnsurePendingQueue();
   [ReactNativeAppIntentsPendingURLs addObjectsFromArray:persistedURLs];
-  [[NSUserDefaults standardUserDefaults] removeObjectForKey:ReactNativeAppIntentsPendingURLsDefaultsKey];
+  [ReactNativeAppIntentsUserDefaults() removeObjectForKey:ReactNativeAppIntentsPendingURLsDefaultsKey];
 }
 
 @implementation ReactNativeAppIntents

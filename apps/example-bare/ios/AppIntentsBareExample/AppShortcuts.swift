@@ -1,11 +1,18 @@
 import AppIntents
 import Foundation
-import UIKit
 
+private let reactNativeAppIntentsAppGroupInfoKey = "ReactNativeAppIntentsAppGroupIdentifier"
 private let reactNativeAppIntentsPendingURLsKey = "ReactNativeAppIntentsPendingURLs"
+private func reactNativeAppIntentsUserDefaults() -> UserDefaults {
+  if let suiteName = Bundle.main.object(forInfoDictionaryKey: reactNativeAppIntentsAppGroupInfoKey) as? String,
+     let sharedDefaults = UserDefaults(suiteName: suiteName) {
+    return sharedDefaults
+  }
 
+  return UserDefaults.standard
+}
 private func enqueueReactNativeAppIntentURL(_ url: URL) {
-  let defaults = UserDefaults.standard
+  let defaults = reactNativeAppIntentsUserDefaults()
   var pendingUrls = defaults.stringArray(forKey: reactNativeAppIntentsPendingURLsKey) ?? []
   pendingUrls.append(url.absoluteString)
   defaults.set(pendingUrls, forKey: reactNativeAppIntentsPendingURLsKey)
@@ -16,26 +23,6 @@ private func encodeReactNativeAppIntentsJSONValue<T: Encodable>(_ value: T) thro
   encoder.dateEncodingStrategy = .iso8601
   let data = try encoder.encode(value)
   return String(decoding: data, as: UTF8.self)
-}
-
-private func openReactNativeAppIntentURL(_ url: URL) async throws {
-  try await withCheckedThrowingContinuation { continuation in
-    Task { @MainActor in
-      UIApplication.shared.open(url, options: [:]) { success in
-        if success {
-          continuation.resume()
-        } else {
-          continuation.resume(
-            throwing: NSError(
-              domain: "ReactNativeAppIntents",
-              code: 3,
-              userInfo: [NSLocalizedDescriptionKey: "Could not open app-intents URL."]
-            )
-          )
-        }
-      }
-    }
-  }
 }
 
 @available(iOS 16.0, *)
@@ -123,7 +110,7 @@ struct OrderEntityQuery: EntityQuery, EntityStringQuery {
 struct OpenOrderIntent: AppIntent {
   static let title: LocalizedStringResource = "Open Order"
   static let description = IntentDescription("Open a specific order by number.")
-  static let openAppWhenRun = false
+  static let openAppWhenRun = true
 
   @Parameter(
     title: "Order number",
@@ -150,7 +137,7 @@ struct OpenOrderIntent: AppIntent {
       )
     }
 
-    try await openReactNativeAppIntentURL(url)
+    enqueueReactNativeAppIntentURL(url)
     return .result()
   }
 }
@@ -159,7 +146,7 @@ struct OpenOrderIntent: AppIntent {
 struct OpenSavedOrderIntent: AppIntent {
   static let title: LocalizedStringResource = "Open Saved Order"
   static let description = IntentDescription("Open a saved order from inventory.")
-  static let openAppWhenRun = false
+  static let openAppWhenRun = true
 
   @Parameter(
     title: "Order",
@@ -186,7 +173,7 @@ struct OpenSavedOrderIntent: AppIntent {
       )
     }
 
-    try await openReactNativeAppIntentURL(url)
+    enqueueReactNativeAppIntentURL(url)
     return .result()
   }
 }

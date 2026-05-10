@@ -485,18 +485,15 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
   >();
   const initialUrlPromise = linking.getInitialURL();
   let initialUrlHandled = false;
+  const pendingEvents: IntentEventUnion<TIntents>[] = [];
+  let flushingPendingEvents = false;
   let lastHandledUrl: string | null = null;
 
-  async function dispatch(url: string): Promise<void> {
-    const initialUrl = await initialUrlPromise;
-    const event = parseIntentUrl(context, url);
+  function hasMatchingHandlers(event: IntentEventUnion<TIntents>): boolean {
+    return anyIntentHandlers.size > 0 || (intentHandlers.get(event.id)?.size ?? 0) > 0;
+  }
 
-    if (!event || lastHandledUrl === url || (!initialUrlHandled && initialUrl === url)) {
-      return;
-    }
-
-    lastHandledUrl = url;
-
+  async function deliverEvent(event: IntentEventUnion<TIntents>): Promise<void> {
     for (const handler of anyIntentHandlers) {
       await handler(event);
     }
@@ -504,6 +501,54 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
     for (const handler of intentHandlers.get(event.id) ?? []) {
       await handler(event);
     }
+  }
+
+  async function flushPendingEvents(): Promise<void> {
+    if (!initialUrlHandled || flushingPendingEvents || pendingEvents.length === 0) {
+      return;
+    }
+
+    flushingPendingEvents = true;
+
+    try {
+      const remainingEvents: IntentEventUnion<TIntents>[] = [];
+
+      for (const event of pendingEvents.splice(0)) {
+        if (!hasMatchingHandlers(event)) {
+          remainingEvents.push(event);
+          continue;
+        }
+
+        lastHandledUrl = event.url;
+        await deliverEvent(event);
+      }
+
+      pendingEvents.unshift(...remainingEvents);
+    } finally {
+      flushingPendingEvents = false;
+    }
+  }
+
+  async function dispatch(url: string): Promise<void> {
+    const initialUrl = await initialUrlPromise;
+    const event = parseIntentUrl(context, url);
+
+    if (
+      !event ||
+      lastHandledUrl === url ||
+      pendingEvents.some((pendingEvent) => pendingEvent.url === url) ||
+      (!initialUrlHandled && initialUrl === url)
+    ) {
+      return;
+    }
+
+    if (!initialUrlHandled || !hasMatchingHandlers(event)) {
+      pendingEvents.push(event);
+      return;
+    }
+
+    lastHandledUrl = url;
+    await deliverEvent(event);
   }
 
   const subscription = linking.addEventListener("url", (event) => {
@@ -536,6 +581,7 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
       subscription.remove();
       anyIntentHandlers.clear();
       intentHandlers.clear();
+      pendingEvents.length = 0;
     },
 
     async donate(intent, params) {
@@ -543,11 +589,20 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
     },
 
     async getInitialIntent() {
-      const url = await initialUrlPromise;
-
       initialUrlHandled = true;
 
+      const pendingEvent = pendingEvents.shift();
+
+      if (pendingEvent) {
+        lastHandledUrl = pendingEvent.url;
+        void flushPendingEvents();
+        return pendingEvent;
+      }
+
+      const url = await initialUrlPromise;
+
       if (!url || lastHandledUrl === url) {
+        void flushPendingEvents();
         return null;
       }
 
@@ -557,11 +612,14 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
         lastHandledUrl = url;
       }
 
+      void flushPendingEvents();
       return event;
     },
 
     onAnyIntent(handler) {
       anyIntentHandlers.add(handler);
+
+      void flushPendingEvents();
 
       return () => {
         anyIntentHandlers.delete(handler);
@@ -569,12 +627,16 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
     },
 
     onIntent(intent, handler) {
-      return addIntentHandler(intent.id, (event) =>
+      const unsubscribe = addIntentHandler(intent.id, (event) =>
         handler(
           event.params as unknown as ParamsOf<typeof intent>,
           event as unknown as IntentEvent<typeof intent>,
         ),
       );
+
+      void flushPendingEvents();
+
+      return unsubscribe;
     },
 
     async updateDynamicShortcuts(shortcuts) {

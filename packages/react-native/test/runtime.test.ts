@@ -170,6 +170,42 @@ test("runtime preserves the initial intent when linking emits it during startup"
   assert.deepEqual(received, ["5678"]);
 });
 
+test("runtime returns a startup event that arrives before any handlers subscribe", async () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    params: {
+      orderNumber: p.string(),
+    },
+  });
+  const linking = createLinkingAdapter(null);
+  const runtime = createAppIntentsRuntime({
+    scheme: "example",
+    intents: [openOrder] as const,
+    linking: linking.adapter,
+    nativeModule: {
+      async donate() {},
+      async updateDynamicShortcuts() {},
+    },
+  });
+
+  assert.equal(await runtime.getInitialIntent(), null);
+
+  linking.emit(buildIntentUrl("example", openOrder, { orderNumber: "1234" }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const initialIntent = await runtime.getInitialIntent();
+
+  runtime.dispose();
+
+  assert.deepEqual(initialIntent, {
+    id: "openOrder",
+    intent: openOrder,
+    params: { orderNumber: "1234" },
+    url: "example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%221234%22%7D",
+  });
+});
+
 test("parseIntentUrl ignores unrelated urls", () => {
   const openOrder = defineIntent({
     id: "openOrder",
