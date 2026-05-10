@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "example"
+    "example",
+    "apps/*"
   ],
   "type": "module",
   "scripts": {
@@ -12,7 +13,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint .",
-    "test": "bun test",
+    "test": "bun test packages example",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

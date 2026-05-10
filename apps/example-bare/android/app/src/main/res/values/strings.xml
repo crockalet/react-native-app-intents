@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">AppIntentsBareExample</string>
+    <string name="shortcut_open_order_short">Open Order</string>
+    <string name="shortcut_open_order_long">Open order 1234</string>
+</resources>

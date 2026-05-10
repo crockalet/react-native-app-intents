@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="open_order_demo"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_open_order_short"
+        android:shortcutLongLabel="@string/shortcut_open_order_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.crockalet.appintents.example"
+            android:targetClass="com.crockalet.appintents.example.MainActivity"
+            android:data="example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%221234%22%7D" />
+    </shortcut>
+</shortcuts>
