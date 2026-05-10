@@ -4,7 +4,10 @@ import type { IntentEventUnion } from "@react-native-app-intents/react-native";
 import { openOrder as Intent0 } from "../orders.intents.js";
 import { openSavedOrder as Intent1 } from "../orders.intents.js";
 
-export declare const generatedAppIntents: readonly [typeof Intent0, typeof Intent1];
+export declare const generatedAppIntents: readonly [
+  typeof Intent0,
+  typeof Intent1,
+];
 
 export interface GeneratedAppIntentMap {
   openOrder: ParamsOf<typeof Intent0>;

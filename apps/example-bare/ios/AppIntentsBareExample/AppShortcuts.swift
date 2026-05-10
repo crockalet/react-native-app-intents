@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import UIKit
 
 private let reactNativeAppIntentsPendingURLsKey = "ReactNativeAppIntentsPendingURLs"
 
@@ -15,6 +16,26 @@ private func encodeReactNativeAppIntentsJSONValue<T: Encodable>(_ value: T) thro
   encoder.dateEncodingStrategy = .iso8601
   let data = try encoder.encode(value)
   return String(decoding: data, as: UTF8.self)
+}
+
+private func openReactNativeAppIntentURL(_ url: URL) async throws {
+  try await withCheckedThrowingContinuation { continuation in
+    Task { @MainActor in
+      UIApplication.shared.open(url, options: [:]) { success in
+        if success {
+          continuation.resume()
+        } else {
+          continuation.resume(
+            throwing: NSError(
+              domain: "ReactNativeAppIntents",
+              code: 3,
+              userInfo: [NSLocalizedDescriptionKey: "Could not open app-intents URL."]
+            )
+          )
+        }
+      }
+    }
+  }
 }
 
 @available(iOS 16.0, *)
@@ -102,7 +123,7 @@ struct OrderEntityQuery: EntityQuery, EntityStringQuery {
 struct OpenOrderIntent: AppIntent {
   static let title: LocalizedStringResource = "Open Order"
   static let description = IntentDescription("Open a specific order by number.")
-  static let openAppWhenRun = true
+  static let openAppWhenRun = false
 
   @Parameter(
     title: "Order number",
@@ -129,7 +150,7 @@ struct OpenOrderIntent: AppIntent {
       )
     }
 
-    enqueueReactNativeAppIntentURL(url)
+    try await openReactNativeAppIntentURL(url)
     return .result()
   }
 }
@@ -138,7 +159,7 @@ struct OpenOrderIntent: AppIntent {
 struct OpenSavedOrderIntent: AppIntent {
   static let title: LocalizedStringResource = "Open Saved Order"
   static let description = IntentDescription("Open a saved order from inventory.")
-  static let openAppWhenRun = true
+  static let openAppWhenRun = false
 
   @Parameter(
     title: "Order",
@@ -165,7 +186,7 @@ struct OpenSavedOrderIntent: AppIntent {
       )
     }
 
-    enqueueReactNativeAppIntentURL(url)
+    try await openReactNativeAppIntentURL(url)
     return .result()
   }
 }
