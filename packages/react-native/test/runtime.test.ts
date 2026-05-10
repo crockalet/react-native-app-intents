@@ -32,6 +32,39 @@ function createLinkingAdapter(initialUrl: string | null = null) {
   };
 }
 
+function createEagerInitialLinkingAdapter(initialUrl: string | null = null) {
+  let currentInitialUrl = initialUrl;
+  let listener: ((event: { url: string }) => void) | null = null;
+
+  return {
+    adapter: {
+      addEventListener(_event: "url", nextListener: (event: { url: string }) => void) {
+        listener = nextListener;
+
+        if (currentInitialUrl) {
+          const url = currentInitialUrl;
+          currentInitialUrl = null;
+          queueMicrotask(() => {
+            listener?.({ url });
+          });
+        }
+
+        return {
+          remove() {
+            listener = null;
+          },
+        };
+      },
+      async getInitialURL() {
+        return currentInitialUrl;
+      },
+    },
+    emit(url: string) {
+      listener?.({ url });
+    },
+  };
+}
+
 test("runtime parses initial urls and emits typed handlers", async () => {
   const openOrder = defineIntent({
     id: "openOrder",
@@ -94,6 +127,47 @@ test("runtime parses initial urls and emits typed handlers", async () => {
       url: "example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%225678%22%7D",
     },
   ]);
+});
+
+test("runtime preserves the initial intent when linking emits it during startup", async () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    params: {
+      orderNumber: p.string(),
+    },
+  });
+  const linking = createEagerInitialLinkingAdapter(
+    buildIntentUrl("example", openOrder, { orderNumber: "1234" }),
+  );
+  const runtime = createAppIntentsRuntime({
+    scheme: "example",
+    intents: [openOrder] as const,
+    linking: linking.adapter,
+    nativeModule: {
+      async donate() {},
+      async updateDynamicShortcuts() {},
+    },
+  });
+
+  const received: string[] = [];
+  const unsubscribe = runtime.onIntent(openOrder, ({ orderNumber }) => {
+    received.push(orderNumber);
+  });
+  const initialIntent = await runtime.getInitialIntent();
+  linking.emit(buildIntentUrl("example", openOrder, { orderNumber: "5678" }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  unsubscribe();
+  runtime.dispose();
+
+  assert.deepEqual(initialIntent, {
+    id: "openOrder",
+    intent: openOrder,
+    params: { orderNumber: "1234" },
+    url: "example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%221234%22%7D",
+  });
+  assert.deepEqual(received, ["5678"]);
 });
 
 test("parseIntentUrl ignores unrelated urls", () => {

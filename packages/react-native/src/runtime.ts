@@ -462,12 +462,15 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
     string,
     Set<(event: IntentEventUnion<TIntents>) => MaybePromise>
   >();
+  const initialUrlPromise = linking.getInitialURL();
+  let initialUrlHandled = false;
   let lastHandledUrl: string | null = null;
 
   async function dispatch(url: string): Promise<void> {
+    const initialUrl = await initialUrlPromise;
     const event = parseIntentUrl(context, url);
 
-    if (!event || lastHandledUrl === url) {
+    if (!event || lastHandledUrl === url || (!initialUrlHandled && initialUrl === url)) {
       return;
     }
 
@@ -519,7 +522,9 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
     },
 
     async getInitialIntent() {
-      const url = await linking.getInitialURL();
+      const url = await initialUrlPromise;
+
+      initialUrlHandled = true;
 
       if (!url || lastHandledUrl === url) {
         return null;
