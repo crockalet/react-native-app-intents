@@ -5,7 +5,12 @@ import test from "node:test";
 
 import { defineAppIntentsConfig, generateAppIntents } from "@react-native-app-intents/codegen";
 
-import { withAppIntents } from "../src/index.js";
+import {
+  applyEntitlementsAppIntentsConfig,
+  applyInfoPlistAppIntentsConfig,
+  patchSwiftAppDelegate,
+  withAppIntents,
+} from "../src/index.js";
 
 test("withAppIntents appends a plugin tuple", () => {
   const config = withAppIntents(
@@ -14,7 +19,63 @@ test("withAppIntents appends a plugin tuple", () => {
   );
 
   assert.deepEqual(config.plugins, [
-    ["react-native-app-intents", { intents: ["src/**/*.intents.ts"], scheme: "example" }],
+    ["@react-native-app-intents/expo-plugin", { intents: ["src/**/*.intents.ts"], scheme: "example" }],
+  ]);
+});
+
+test("patchSwiftAppDelegate injects quick action forwarding idempotently", () => {
+  const source = [
+    "import Expo",
+    "import UIKit",
+    "",
+    "@UIApplicationMain",
+    "class AppDelegate: ExpoAppDelegate {",
+    "  func application(",
+    "    _ application: UIApplication,",
+    "    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil",
+    "  ) -> Bool {",
+    "    return super.application(application, didFinishLaunchingWithOptions: launchOptions)",
+    "  }",
+    "}",
+    "",
+  ].join("\n");
+
+  const patched = patchSwiftAppDelegate(source);
+
+  assert.match(patched, /import ReactNativeAppIntents/);
+  assert.match(patched, /launchOptions\?\[\.shortcutItem\] as\? UIApplicationShortcutItem/);
+  assert.match(patched, /performActionFor shortcutItem: UIApplicationShortcutItem/);
+  assert.equal(patchSwiftAppDelegate(patched), patched);
+});
+
+test("Expo config helpers patch Info.plist and entitlements", () => {
+  const options = defineAppIntentsConfig({
+    intents: ["src/**/*.intents.ts"],
+    scheme: "expoexample",
+    ios: {
+      appGroupIdentifier: "group.dev.expo.example",
+      siriUsageDescription: "Used to let Siri run app actions.",
+    },
+  });
+
+  const infoPlist = applyInfoPlistAppIntentsConfig({}, options);
+  const entitlements = applyEntitlementsAppIntentsConfig({}, options);
+
+  assert.deepEqual(infoPlist.CFBundleURLTypes, [
+    {
+      CFBundleURLSchemes: ["expoexample"],
+    },
+  ]);
+  assert.equal(
+    infoPlist.ReactNativeAppIntentsAppGroupIdentifier,
+    "group.dev.expo.example",
+  );
+  assert.equal(
+    infoPlist.NSSiriUsageDescription,
+    "Used to let Siri run app actions.",
+  );
+  assert.deepEqual(entitlements["com.apple.security.application-groups"], [
+    "group.dev.expo.example",
   ]);
 });
 

@@ -2,8 +2,14 @@ import AppIntents
 import Foundation
 
 private let reactNativeAppIntentsAppGroupInfoKey = "ReactNativeAppIntentsAppGroupIdentifier"
+private let reactNativeAppIntentsAppGroupIdentifier: String? = "group.com.crockalet.appintents.example"
 private let reactNativeAppIntentsPendingURLsKey = "ReactNativeAppIntentsPendingURLs"
 private func reactNativeAppIntentsUserDefaults() -> UserDefaults {
+  if let suiteName = reactNativeAppIntentsAppGroupIdentifier,
+     let sharedDefaults = UserDefaults(suiteName: suiteName) {
+    return sharedDefaults
+  }
+
   if let suiteName = Bundle.main.object(forInfoDictionaryKey: reactNativeAppIntentsAppGroupInfoKey) as? String,
      let sharedDefaults = UserDefaults(suiteName: suiteName) {
     return sharedDefaults
@@ -16,6 +22,7 @@ private func enqueueReactNativeAppIntentURL(_ url: URL) {
   var pendingUrls = defaults.stringArray(forKey: reactNativeAppIntentsPendingURLsKey) ?? []
   pendingUrls.append(url.absoluteString)
   defaults.set(pendingUrls, forKey: reactNativeAppIntentsPendingURLsKey)
+  defaults.synchronize()
 }
 
 private func encodeReactNativeAppIntentsJSONValue<T: Encodable>(_ value: T) throws -> String {

@@ -5,6 +5,7 @@ export default defineAppIntentsConfig({
   scheme: "example",
   ios: {
     output: "../apps/example-bare/ios/AppIntentsBareExample/AppShortcuts.swift",
+    appGroupIdentifier: "group.com.crockalet.appintents.example",
     appShortcutsProviderName: "ExampleAppShortcuts",
     bundleIdentifier: "com.crockalet.appintents.example",
     siriUsageDescription: "Used to let Siri run example app actions.",

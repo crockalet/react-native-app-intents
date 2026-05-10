@@ -11,7 +11,10 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
   const config = defineAppIntentsConfig({
     intents: ["src/**/*.intents.ts"],
     scheme: "example",
-    ios: { output: "ios/AppIntents/GeneratedAppIntents.swift" },
+    ios: {
+      output: "ios/AppIntents/GeneratedAppIntents.swift",
+      appGroupIdentifier: "group.com.crockalet.appintents.example",
+    },
     android: {
       manifest: "android/app/src/main/AndroidManifest.xml",
       packageName: "com.crockalet.appintents.example",
@@ -116,6 +119,11 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
     assert.match(generatedSwift, /struct OpenSavedOrderIntent: AppIntent/);
     assert.match(generatedSwift, /struct GeneratedAppShortcuts: AppShortcutsProvider/);
     assert.match(generatedSwift, /enqueueReactNativeAppIntentURL/);
+    assert.match(
+      generatedSwift,
+      /private let reactNativeAppIntentsAppGroupIdentifier: String\? = "group\.com\.crockalet\.appintents\.example"/,
+    );
+    assert.match(generatedSwift, /defaults\.synchronize\(\)/);
     assert.match(generatedSwift, /Open \\\(\\\.\$order\) in \\\(.applicationName\)/);
     assert.match(generatedShortcuts, /android:shortcutId="openOrder"/);
     assert.match(generatedShortcuts, /<capability android:name="actions.intent.GET_ORDER">/);

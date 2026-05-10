@@ -35,6 +35,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       ExampleAppShortcuts.updateAppShortcutParameters()
     }
 
+    if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem,
+       handleShortcutItem(shortcutItem) {
+      return false
+    }
+
     return true
   }
 
@@ -48,6 +53,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     return RCTLinkingManager.application(app, open: url, options: options)
+  }
+
+  func application(
+    _ application: UIApplication,
+    performActionFor shortcutItem: UIApplicationShortcutItem,
+    completionHandler: @escaping (Bool) -> Void
+  ) {
+    completionHandler(handleShortcutItem(shortcutItem))
+  }
+
+  private func handleShortcutItem(_ shortcutItem: UIApplicationShortcutItem) -> Bool {
+    guard let url = shortcutItem.userInfo?["url"] as? String else {
+      return false
+    }
+
+    ReactNativeAppIntents.recordIncomingURLString(url)
+    return true
   }
 }
 

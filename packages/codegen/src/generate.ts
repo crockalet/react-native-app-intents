@@ -772,6 +772,7 @@ function renderSwift(
   entityMetadata: readonly NormalizedEntityMetadata[],
   scheme: string,
   providerName: string,
+  appGroupIdentifier?: string,
 ): string {
   const entitiesById = new Map(entityMetadata.map((entity) => [entity.id, entity]));
   const declarations: string[] = [
@@ -779,8 +780,16 @@ function renderSwift(
     "import Foundation",
     "",
     'private let reactNativeAppIntentsAppGroupInfoKey = "ReactNativeAppIntentsAppGroupIdentifier"',
+    `private let reactNativeAppIntentsAppGroupIdentifier: String? = ${
+      appGroupIdentifier ? `"${escapeSwiftString(appGroupIdentifier)}"` : "nil"
+    }`,
     `private let reactNativeAppIntentsPendingURLsKey = "${IOS_PENDING_URLS_DEFAULTS_KEY}"`,
     "private func reactNativeAppIntentsUserDefaults() -> UserDefaults {",
+    "  if let suiteName = reactNativeAppIntentsAppGroupIdentifier,",
+    "     let sharedDefaults = UserDefaults(suiteName: suiteName) {",
+    "    return sharedDefaults",
+    "  }",
+    "",
     "  if let suiteName = Bundle.main.object(forInfoDictionaryKey: reactNativeAppIntentsAppGroupInfoKey) as? String,",
     "     let sharedDefaults = UserDefaults(suiteName: suiteName) {",
     "    return sharedDefaults",
@@ -793,6 +802,7 @@ function renderSwift(
     "  var pendingUrls = defaults.stringArray(forKey: reactNativeAppIntentsPendingURLsKey) ?? []",
     "  pendingUrls.append(url.absoluteString)",
     "  defaults.set(pendingUrls, forKey: reactNativeAppIntentsPendingURLsKey)",
+    "  defaults.synchronize()",
     "}",
     "",
     "private func encodeReactNativeAppIntentsJSONValue<T: Encodable>(_ value: T) throws -> String {",
@@ -1111,6 +1121,7 @@ async function renderArtifacts(config: AppIntentsConfig, cwd: string): Promise<R
         normalizedEntities,
         config.scheme,
         config.ios.appShortcutsProviderName ?? "GeneratedAppShortcuts",
+        config.ios.appGroupIdentifier,
       ),
       path: resolve(cwd, config.ios.output),
       platform: "ios",

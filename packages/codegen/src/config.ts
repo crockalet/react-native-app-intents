@@ -1,6 +1,7 @@
 export interface IOSAppIntentsConfig {
   output: string;
   appShortcutsProviderName?: string;
+  appGroupIdentifier?: string;
   bundleIdentifier?: string;
   siriUsageDescription?: string;
 }
