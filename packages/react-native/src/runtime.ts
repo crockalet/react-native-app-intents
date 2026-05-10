@@ -205,6 +205,8 @@ function serializeParameterValue(definition: AnyParameterDefinition, value: unkn
   switch (definition.kind) {
     case "date":
       return value instanceof Date ? value.toISOString() : value;
+    case "entity":
+      return serializeEntityValue(definition, value);
     case "object": {
       if (typeof value !== "object" || value === null) {
         return value;
@@ -221,6 +223,26 @@ function serializeParameterValue(definition: AnyParameterDefinition, value: unkn
     default:
       return value;
   }
+}
+
+function serializeEntityValue(
+  definition: Extract<AnyParameterDefinition, { kind: "entity" }>,
+  value: unknown,
+): unknown {
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+
+  const serialized: Record<string, unknown> = {};
+
+  for (const [key, field] of Object.entries(definition.entity.schema.fields) as [
+    string,
+    AnyParameterDefinition,
+  ][]) {
+    serialized[key] = serializeParameterValue(field, (value as Record<string, unknown>)[key]);
+  }
+
+  return serialized;
 }
 
 function deserializeParameterValue(definition: AnyParameterDefinition, value: unknown): unknown {
@@ -247,6 +269,22 @@ function deserializeParameterValue(definition: AnyParameterDefinition, value: un
       return String(value).toLowerCase() === "true";
     case "date":
       return value instanceof Date ? value : new Date(String(value));
+    case "entity": {
+      if (typeof value !== "object" || value === null) {
+        return value;
+      }
+
+      const parsed: Record<string, unknown> = {};
+
+      for (const [key, field] of Object.entries(definition.entity.schema.fields) as [
+        string,
+        AnyParameterDefinition,
+      ][]) {
+        parsed[key] = deserializeParameterValue(field, (value as Record<string, unknown>)[key]);
+      }
+
+      return parsed;
+    }
     case "object": {
       if (typeof value !== "object" || value === null) {
         return value;
@@ -260,8 +298,6 @@ function deserializeParameterValue(definition: AnyParameterDefinition, value: un
 
       return parsed;
     }
-    case "entity":
-      return value;
   }
 }
 

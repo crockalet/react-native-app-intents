@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
-import { exampleRuntime, openOrder } from "@react-native-app-intents/example";
+import { exampleRuntime, openOrder, openSavedOrder } from "@react-native-app-intents/example";
 
 interface EventLogEntry {
   id: string;
@@ -35,9 +35,14 @@ function App(): ReactElement {
 function AppContent(): ReactElement {
   const [initialIntentId, setInitialIntentId] = useState<string | null>(null);
   const [events, setEvents] = useState<EventLogEntry[]>([]);
+  const savedOrder = useMemo(() => ({ customer: "Taylor", id: 1, number: "1234" }), []);
   const simulateIntentUrl = useMemo(
     () => exampleRuntime.buildUrl(openOrder, { orderNumber: "1234" }),
     [],
+  );
+  const simulateSavedIntentUrl = useMemo(
+    () => exampleRuntime.buildUrl(openSavedOrder, { order: savedOrder }),
+    [savedOrder],
   );
 
   useEffect(() => {
@@ -81,12 +86,21 @@ function AppContent(): ReactElement {
         <Text selectable style={styles.code}>
           {simulateIntentUrl}
         </Text>
+        <Text selectable style={styles.code}>
+          {simulateSavedIntentUrl}
+        </Text>
         <View style={styles.actions}>
           <Button
             onPress={() => {
               void Linking.openURL(simulateIntentUrl);
             }}
             title="Simulate intent URL"
+          />
+          <Button
+            onPress={() => {
+              void Linking.openURL(simulateSavedIntentUrl);
+            }}
+            title="Simulate saved order URL"
           />
           <Button
             onPress={() => {
@@ -102,6 +116,12 @@ function AppContent(): ReactElement {
                   params: { orderNumber: "1234" },
                   shortTitle: "Open Order 1234",
                   longTitle: "Open order 1234 in the example app",
+                },
+                {
+                  intent: openSavedOrder,
+                  params: { order: savedOrder },
+                  shortTitle: "Open Saved Order",
+                  longTitle: "Open saved order 1234 in the example app",
                 },
               ]);
             }}

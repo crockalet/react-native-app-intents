@@ -4,10 +4,13 @@ import { pathToFileURL } from "node:url";
 
 import {
   normalizeIntentDefinitions,
+  normalizeReferencedEntities,
   resolveLocalizedText,
   type AnyParameterDefinition,
   type IntentDefinition,
+  type NormalizedEntityMetadata,
   type NormalizedIntentMetadata,
+  type ObjectParameterDefinition,
 } from "@react-native-app-intents/core";
 
 import type { AppIntentsConfig } from "./config.js";
@@ -41,12 +44,28 @@ interface RenderedArtifacts {
 }
 
 interface AndroidShortcutArtifact {
+  capabilityBindings?: readonly AndroidShortcutCapabilityBinding[];
   id: string;
   longLabel: string;
   shortLabel: string;
   shortLabelResourceName: string;
   longLabelResourceName: string;
   url: string;
+}
+
+interface AndroidShortcutCapabilityBinding {
+  capabilityName: string;
+  parameterBindings: readonly AndroidShortcutParameterBinding[];
+}
+
+interface AndroidShortcutParameterBinding {
+  key: string;
+  value: string;
+}
+
+interface AndroidCapabilityArtifact {
+  name: string;
+  parameterNames: readonly string[];
 }
 
 const IOS_PENDING_URLS_DEFAULTS_KEY = "ReactNativeAppIntentsPendingURLs";
@@ -206,25 +225,39 @@ function serializeParameterDefault(definition: AnyParameterDefinition, value: un
   switch (definition.kind) {
     case "date":
       return value instanceof Date ? value.toISOString() : value;
+    case "entity":
+      return serializeObjectParameterDefault(definition.entity.schema, value);
     case "object": {
-      if (typeof value !== "object" || value === null) {
-        return value;
-      }
-
-      const serialized: Record<string, unknown> = {};
-
-      for (const [fieldName, fieldDefinition] of Object.entries(definition.fields)) {
-        serialized[fieldName] = serializeParameterDefault(
-          fieldDefinition,
-          (value as Record<string, unknown>)[fieldName],
-        );
-      }
-
-      return serialized;
+      return serializeObjectParameterDefault(definition, value);
     }
     default:
       return value;
   }
+}
+
+function serializeObjectParameterDefault(
+  definition:
+    | Extract<AnyParameterDefinition, { kind: "object" }>
+    | ObjectParameterDefinition<Record<string, AnyParameterDefinition>, boolean>,
+  value: unknown,
+): unknown {
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+
+  const serialized: Record<string, unknown> = {};
+
+  for (const [fieldName, fieldDefinition] of Object.entries(definition.fields) as [
+    string,
+    AnyParameterDefinition,
+  ][]) {
+    serialized[fieldName] = serializeParameterDefault(
+      fieldDefinition,
+      (value as Record<string, unknown>)[fieldName],
+    );
+  }
+
+  return serialized;
 }
 
 function buildDefaultParams(intent: NormalizedIntentMetadata): Record<string, unknown> | null {
@@ -250,12 +283,25 @@ function buildIntentUrl(scheme: string, intentId: string, params: Record<string,
   )}`;
 }
 
-function toSwiftAppShortcutPhrase(phrase: string): string {
-  const sentinel = "__APP_NAME_PLACEHOLDER__";
+function toSwiftAppShortcutPhrase(
+  phrase: string,
+  parametersByName: ReadonlyMap<string, NormalizedIntentMetadata["params"][number]>,
+): string {
+  const appNameSentinel = "__APP_NAME_PLACEHOLDER__";
+  const parameterSentinelPattern = /__PARAMETER_PLACEHOLDER_([A-Za-z0-9_]+)__/g;
+  let rendered = phrase.replaceAll("${.applicationName}", appNameSentinel);
 
-  return escapeSwiftString(phrase.replaceAll("${.applicationName}", sentinel)).replaceAll(
-    sentinel,
-    "\\(.applicationName)",
+  rendered = rendered.replace(/\$\{([A-Za-z0-9_]+)\}/g, (_match, parameterName: string) => {
+    return parametersByName.get(parameterName)?.kind === "entity"
+      ? `__PARAMETER_PLACEHOLDER_${parameterName}__`
+      : "";
+  });
+  rendered = rendered.replace(/\s+/g, " ").trim();
+  rendered = escapeSwiftString(rendered).replaceAll(appNameSentinel, "\\(.applicationName)");
+
+  return rendered.replace(
+    parameterSentinelPattern,
+    (_match, parameterName: string) => `\\(\\.$${parameterName})`,
   );
 }
 
@@ -270,6 +316,7 @@ function toAndroidResourceName(value: string): string {
 
 function getAndroidShortcutArtifact(
   intent: NormalizedIntentMetadata,
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
   scheme: string,
 ): AndroidShortcutArtifact | null {
   const defaultParams = buildDefaultParams(intent);
@@ -286,12 +333,18 @@ function getAndroidShortcutArtifact(
     longLabelResourceName: `react_native_app_intents_${resourceBaseName}_long_label`,
     shortLabel: intent.title,
     shortLabelResourceName: `react_native_app_intents_${resourceBaseName}_short_label`,
+    ...(intent.androidBii
+      ? {
+          capabilityBindings: getAndroidCapabilityBindings(intent, defaultParams, entitiesById),
+        }
+      : {}),
     url: buildIntentUrl(scheme, intent.id, defaultParams),
   };
 }
 
 function getAndroidShortcutArtifacts(
   intentMetadata: readonly NormalizedIntentMetadata[],
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
   scheme: string,
 ): AndroidShortcutArtifact[] {
   const artifacts: AndroidShortcutArtifact[] = [];
@@ -301,7 +354,7 @@ function getAndroidShortcutArtifacts(
       continue;
     }
 
-    const artifact = getAndroidShortcutArtifact(intent, scheme);
+    const artifact = getAndroidShortcutArtifact(intent, entitiesById, scheme);
 
     if (artifact) {
       artifacts.push(artifact);
@@ -311,7 +364,233 @@ function getAndroidShortcutArtifacts(
   return artifacts;
 }
 
-function getSwiftType(definition: AnyParameterDefinition): string {
+function buildDefaultParamsExcept(
+  intent: NormalizedIntentMetadata,
+  omittedParameterName: string,
+): Record<string, unknown> | null {
+  const params: Record<string, unknown> = {};
+
+  for (const [paramName, definition] of Object.entries(intent.intent.params) as [
+    string,
+    AnyParameterDefinition,
+  ][]) {
+    if (paramName === omittedParameterName) {
+      continue;
+    }
+
+    if (!("default" in definition) || definition.default === undefined) {
+      return null;
+    }
+
+    params[paramName] = serializeParameterDefault(definition, definition.default);
+  }
+
+  return params;
+}
+
+function getAndroidCapabilityBindingValue(
+  parameter: NormalizedIntentMetadata["params"][number],
+  value: unknown,
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
+): string | null {
+  if (value === undefined) {
+    return null;
+  }
+
+  if (parameter.kind === "entity" && parameter.entityId) {
+    const entity = entitiesById.get(parameter.entityId);
+
+    if (!entity) {
+      return null;
+    }
+
+    const serializedValue = JSON.stringify(value);
+    const inventoryItem = entity.inventory.find((item) => item.jsonValue === serializedValue);
+
+    return inventoryItem?.displayRepresentation.title ?? null;
+  }
+
+  return String(value);
+}
+
+function getAndroidCapabilityBindings(
+  intent: NormalizedIntentMetadata,
+  params: Record<string, unknown>,
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
+): readonly AndroidShortcutCapabilityBinding[] {
+  if (!intent.androidBii) {
+    return [];
+  }
+
+  const parameterBindings = intent.params.flatMap((parameter) => {
+    if (!parameter.androidBiiParam) {
+      return [];
+    }
+
+    const value = getAndroidCapabilityBindingValue(parameter, params[parameter.name], entitiesById);
+
+    if (value === null) {
+      return [];
+    }
+
+    return [{ key: parameter.androidBiiParam, value }];
+  });
+
+  if (parameterBindings.length === 0) {
+    return [];
+  }
+
+  return [{ capabilityName: intent.androidBii, parameterBindings }];
+}
+
+function getAndroidCapabilityArtifacts(
+  intentMetadata: readonly NormalizedIntentMetadata[],
+): AndroidCapabilityArtifact[] {
+  const parameterNamesByCapability = new Map<string, Set<string>>();
+
+  for (const intent of intentMetadata) {
+    if (!intent.androidBii) {
+      continue;
+    }
+
+    const parameterNames = parameterNamesByCapability.get(intent.androidBii) ?? new Set<string>();
+
+    for (const parameter of intent.params) {
+      if (parameter.androidBiiParam) {
+        parameterNames.add(parameter.androidBiiParam);
+      }
+    }
+
+    parameterNamesByCapability.set(intent.androidBii, parameterNames);
+  }
+
+  return [...parameterNamesByCapability.entries()].map(([name, parameterNames]) => ({
+    name,
+    parameterNames: [...parameterNames],
+  }));
+}
+
+function getAndroidCapabilityInventoryShortcuts(
+  intentMetadata: readonly NormalizedIntentMetadata[],
+  entityMetadata: readonly NormalizedEntityMetadata[],
+  scheme: string,
+): AndroidShortcutArtifact[] {
+  const entitiesById = new Map(entityMetadata.map((entity) => [entity.id, entity]));
+
+  return intentMetadata.flatMap((intent) => {
+    if (!intent.androidBii) {
+      return [];
+    }
+
+    const entityParameters = intent.params.filter(
+      (
+        parameter,
+      ): parameter is NormalizedIntentMetadata["params"][number] & {
+        entityId: string;
+        kind: "entity";
+      } => parameter.kind === "entity" && parameter.entityId !== undefined,
+    );
+
+    if (entityParameters.length !== 1) {
+      return [];
+    }
+
+    const entityParameter = entityParameters[0];
+
+    if (!entityParameter) {
+      return [];
+    }
+
+    const entity = entitiesById.get(entityParameter.entityId);
+
+    if (!entity) {
+      return [];
+    }
+
+    const baseParams = buildDefaultParamsExcept(intent, entityParameter.name);
+
+    if (baseParams === null) {
+      return [];
+    }
+
+    return entity.inventory.map((inventoryItem) => {
+      const shortcutId = `${intent.id}_${entity.id}_${inventoryItem.identifier}`;
+      const params = {
+        ...baseParams,
+        [entityParameter.name]: inventoryItem.value,
+      };
+
+      return {
+        capabilityBindings: getAndroidCapabilityBindings(intent, params, entitiesById),
+        id: shortcutId,
+        longLabel: `${intent.title} ${inventoryItem.displayRepresentation.title}`.trim(),
+        longLabelResourceName: `react_native_app_intents_${toAndroidResourceName(shortcutId)}_long_label`,
+        shortLabel: inventoryItem.displayRepresentation.title,
+        shortLabelResourceName: `react_native_app_intents_${toAndroidResourceName(shortcutId)}_short_label`,
+        url: buildIntentUrl(scheme, intent.id, params),
+      } satisfies AndroidShortcutArtifact;
+    });
+  });
+}
+
+function renderAndroidShortcutXml(shortcut: AndroidShortcutArtifact, packageName: string): string {
+  return [
+    "    <shortcut",
+    `        android:shortcutId="${escapeXml(shortcut.id)}"`,
+    '        android:enabled="true"',
+    '        android:icon="@mipmap/ic_launcher"',
+    `        android:shortcutShortLabel="@string/${shortcut.shortLabelResourceName}"`,
+    `        android:shortcutLongLabel="@string/${shortcut.longLabelResourceName}">`,
+    "        <intent",
+    '            android:action="android.intent.action.VIEW"',
+    `            android:targetPackage="${escapeXml(packageName)}"`,
+    `            android:targetClass="${escapeXml(`${packageName}.MainActivity`)}"`,
+    `            android:data="${escapeXml(shortcut.url)}" />`,
+    ...(shortcut.capabilityBindings ?? []).flatMap((binding) => [
+      `        <capability-binding android:key="${escapeXml(binding.capabilityName)}">`,
+      ...binding.parameterBindings.map(
+        (parameterBinding) =>
+          `            <parameter-binding android:key="${escapeXml(parameterBinding.key)}" android:value="${escapeXml(parameterBinding.value)}" />`,
+      ),
+      "        </capability-binding>",
+    ]),
+    "    </shortcut>",
+  ].join("\n");
+}
+
+function getNormalizedEntityMetadata(
+  entityId: string,
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
+): NormalizedEntityMetadata {
+  const entity = entitiesById.get(entityId);
+
+  if (!entity) {
+    throw new Error(`Referenced entity "${entityId}" was not normalized.`);
+  }
+
+  return entity;
+}
+
+function getSwiftEntityTypeName(entityId: string): string {
+  return `${toPascalCase(entityId)}AppEntity`;
+}
+
+function getSwiftEntityQueryTypeName(entityId: string): string {
+  return `${toPascalCase(entityId)}EntityQuery`;
+}
+
+function getSwiftEntityCatalogTypeName(entityId: string): string {
+  return `${toPascalCase(entityId)}EntityCatalog`;
+}
+
+function getSwiftEntityRecordTypeName(entityId: string): string {
+  return `${toPascalCase(entityId)}EntityRecord`;
+}
+
+function getSwiftType(
+  definition: AnyParameterDefinition,
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
+): string {
   switch (definition.kind) {
     case "string":
       return "String";
@@ -323,15 +602,22 @@ function getSwiftType(definition: AnyParameterDefinition): string {
       return "Bool";
     case "date":
       return "Date";
-    case "object":
     case "entity":
+      return getSwiftEntityTypeName(
+        getNormalizedEntityMetadata(definition.entity.id, entitiesById).id,
+      );
+    case "object":
       throw new Error(
         `iOS codegen does not yet support "${definition.kind}" App Intent parameters.`,
       );
   }
 }
 
-function renderSwiftParameter(name: string, definition: AnyParameterDefinition): string {
+function renderSwiftParameter(
+  name: string,
+  definition: AnyParameterDefinition,
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
+): string {
   const lines = [
     `  @Parameter(`,
     `    title: "${escapeSwiftString(resolveLocalizedText(definition.title, name) ?? name)}",`,
@@ -343,16 +629,151 @@ function renderSwiftParameter(name: string, definition: AnyParameterDefinition):
   }
 
   lines.push("  )");
-  lines.push(`  var ${name}: ${getSwiftType(definition)}`);
+  lines.push(`  var ${name}: ${getSwiftType(definition, entitiesById)}`);
 
   return lines.join("\n");
 }
 
+function renderSwiftDisplayRepresentationLiteral(
+  displayRepresentation: NormalizedEntityMetadata["inventory"][number]["displayRepresentation"],
+): string {
+  const argumentsList = [`title: "${escapeSwiftString(displayRepresentation.title)}"`];
+
+  if (displayRepresentation.subtitle) {
+    argumentsList.push(`subtitle: "${escapeSwiftString(displayRepresentation.subtitle)}"`);
+  }
+
+  if (displayRepresentation.imageSystemName) {
+    argumentsList.push(
+      `image: DisplayRepresentation.Image(systemName: "${escapeSwiftString(displayRepresentation.imageSystemName)}")`,
+    );
+  }
+
+  return `DisplayRepresentation(${argumentsList.join(", ")})`;
+}
+
+function renderSwiftEntity(entity: NormalizedEntityMetadata): string {
+  const entityTypeName = getSwiftEntityTypeName(entity.id);
+  const entityQueryTypeName = getSwiftEntityQueryTypeName(entity.id);
+  const entityCatalogTypeName = getSwiftEntityCatalogTypeName(entity.id);
+  const entityRecordTypeName = getSwiftEntityRecordTypeName(entity.id);
+  const records = entity.inventory.map((item) =>
+    [
+      `    ${entityRecordTypeName}(`,
+      `      id: "${escapeSwiftString(item.identifier)}",`,
+      `      displayRepresentation: ${renderSwiftDisplayRepresentationLiteral(item.displayRepresentation)},`,
+      `      jsonValue: "${escapeSwiftString(item.jsonValue)}",`,
+      `      searchText: "${escapeSwiftString(
+        [item.identifier, item.displayRepresentation.title, item.displayRepresentation.subtitle]
+          .filter(Boolean)
+          .join(" "),
+      )}"`,
+      "    ),",
+    ].join("\n"),
+  );
+
+  return [
+    "@available(iOS 16.0, *)",
+    `struct ${entityTypeName}: AppEntity {`,
+    `  static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "${escapeSwiftString(entity.title)}")`,
+    `  static let defaultQuery = ${entityQueryTypeName}()`,
+    "",
+    "  let id: String",
+    "",
+    "  var displayRepresentation: DisplayRepresentation {",
+    `    ${entityCatalogTypeName}.displayRepresentation(for: id)`,
+    "  }",
+    "}",
+    "",
+    "@available(iOS 16.0, *)",
+    `private struct ${entityRecordTypeName} {`,
+    "  let id: String",
+    "  let displayRepresentation: DisplayRepresentation",
+    "  let jsonValue: String",
+    "  let searchText: String",
+    "}",
+    "",
+    "@available(iOS 16.0, *)",
+    `private enum ${entityCatalogTypeName} {`,
+    `  static let records: [${entityRecordTypeName}] = [`,
+    ...records,
+    "  ]",
+    `  static let recordsById: [String: ${entityRecordTypeName}] = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })`,
+    `  static let allEntities: [${entityTypeName}] = records.map { ${entityTypeName}(id: $0.id) }`,
+    "",
+    "  static func displayRepresentation(for id: String) -> DisplayRepresentation {",
+    '    recordsById[id]?.displayRepresentation ?? DisplayRepresentation(title: "Unknown")',
+    "  }",
+    "",
+    "  static func jsonValue(for id: String) throws -> String {",
+    "    guard let record = recordsById[id] else {",
+    "      throw NSError(",
+    '        domain: "ReactNativeAppIntents",',
+    "        code: 2,",
+    '        userInfo: [NSLocalizedDescriptionKey: "Could not resolve App Entity payload."]',
+    "      )",
+    "    }",
+    "",
+    "    return record.jsonValue",
+    "  }",
+    "",
+    `  static func entities(for identifiers: [String]) -> [${entityTypeName}] {`,
+    `    identifiers.compactMap { recordsById[$0].map { ${entityTypeName}(id: $0.id) } }`,
+    "  }",
+    "",
+    `  static func search(matching query: String) -> [${entityTypeName}] {`,
+    "    if query.isEmpty {",
+    "      return allEntities",
+    "    }",
+    "",
+    "    let normalizedQuery = query.lowercased()",
+    "",
+    "    return records",
+    "      .filter { $0.searchText.lowercased().contains(normalizedQuery) }",
+    `      .map { ${entityTypeName}(id: $0.id) }`,
+    "  }",
+    "}",
+    "",
+    "@available(iOS 16.0, *)",
+    `struct ${entityQueryTypeName}: EntityQuery, EntityStringQuery {`,
+    `  func entities(for identifiers: [String]) async throws -> [${entityTypeName}] {`,
+    `    ${entityCatalogTypeName}.entities(for: identifiers)`,
+    "  }",
+    "",
+    `  func suggestedEntities() async throws -> [${entityTypeName}] {`,
+    `    ${entityCatalogTypeName}.allEntities`,
+    "  }",
+    "",
+    `  func entities(matching string: String) async throws -> [${entityTypeName}] {`,
+    `    ${entityCatalogTypeName}.search(matching: string)`,
+    "  }",
+    "}",
+    "",
+  ].join("\n");
+}
+
+function renderSwiftPayloadValueExpression(
+  parameterName: string,
+  definition: AnyParameterDefinition,
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
+): string {
+  switch (definition.kind) {
+    case "entity": {
+      const entity = getNormalizedEntityMetadata(definition.entity.id, entitiesById);
+      return `try ${getSwiftEntityCatalogTypeName(entity.id)}.jsonValue(for: ${parameterName}.id)`;
+    }
+    default:
+      return `try encodeReactNativeAppIntentsJSONValue(${parameterName})`;
+  }
+}
+
 function renderSwift(
   intentMetadata: readonly NormalizedIntentMetadata[],
+  entityMetadata: readonly NormalizedEntityMetadata[],
   scheme: string,
   providerName: string,
 ): string {
+  const entitiesById = new Map(entityMetadata.map((entity) => [entity.id, entity]));
   const declarations: string[] = [
     "import AppIntents",
     "import Foundation",
@@ -366,34 +787,41 @@ function renderSwift(
     "  defaults.set(pendingUrls, forKey: reactNativeAppIntentsPendingURLsKey)",
     "}",
     "",
+    "private func encodeReactNativeAppIntentsJSONValue<T: Encodable>(_ value: T) throws -> String {",
+    "  let encoder = JSONEncoder()",
+    "  encoder.dateEncodingStrategy = .iso8601",
+    "  let data = try encoder.encode(value)",
+    "  return String(decoding: data, as: UTF8.self)",
+    "}",
+    "",
   ];
+
+  for (const entity of entityMetadata) {
+    declarations.push(renderSwiftEntity(entity));
+  }
 
   for (const intent of intentMetadata) {
     const typeName = `${toPascalCase(intent.id)}Intent`;
-    const payloadTypeName = `${toPascalCase(intent.id)}Payload`;
-    const payloadFields = (
-      Object.entries(intent.intent.params) as [string, AnyParameterDefinition][]
-    ).map(([name, definition]) => `  let ${name}: ${getSwiftType(definition)}`);
     const parameters = (
       Object.entries(intent.intent.params) as [string, AnyParameterDefinition][]
-    ).map(([name, definition]) => renderSwiftParameter(name, definition));
-    const queryItems =
-      Object.keys(intent.intent.params).length === 0
-        ? "[]"
-        : ["[", '      URLQueryItem(name: "payload", value: payloadString),', "    ]"].join("\n");
-    const payloadArguments =
-      Object.keys(intent.intent.params).length === 0
-        ? ""
-        : Object.keys(intent.intent.params)
-            .map((paramName) => `${paramName}: ${paramName}`)
-            .join(", ");
+    ).map(([name, definition]) => renderSwiftParameter(name, definition, entitiesById));
+    const payloadEntries = (
+      Object.entries(intent.intent.params) as [string, AnyParameterDefinition][]
+    ).map(
+      ([name, definition]) =>
+        `      "\\"${escapeSwiftString(name)}\\": \\(${renderSwiftPayloadValueExpression(name, definition, entitiesById)})",`,
+    );
+    const payloadStringLines =
+      payloadEntries.length === 0
+        ? ['    let payloadString = "{}"']
+        : [
+            "    let payloadEntries = [",
+            ...payloadEntries,
+            "    ]",
+            '    let payloadString = "{\\(payloadEntries.joined(separator: ","))}"',
+          ];
 
     declarations.push(
-      "@available(iOS 16.0, *)",
-      `private struct ${payloadTypeName}: Encodable {`,
-      ...(payloadFields.length === 0 ? ["  init() {}"] : payloadFields),
-      "}",
-      "",
       "@available(iOS 16.0, *)",
       `struct ${typeName}: AppIntent {`,
       `  static let title: LocalizedStringResource = "${escapeSwiftString(intent.title)}"`,
@@ -404,13 +832,12 @@ function renderSwift(
       "",
       ...(parameters.length === 0 ? [] : parameters.flatMap((parameter) => [parameter, ""])),
       "  func perform() async throws -> some IntentResult {",
-      `    let payload = try JSONEncoder().encode(${payloadTypeName}(${payloadArguments}))`,
-      "    let payloadString = String(decoding: payload, as: UTF8.self)",
+      ...payloadStringLines,
       "    var components = URLComponents()",
       `    components.scheme = "${escapeSwiftString(scheme)}"`,
       '    components.host = "app-intents"',
       `    components.path = "/${escapeSwiftString(intent.id)}"`,
-      `    components.queryItems = ${queryItems}`,
+      '    components.queryItems = [URLQueryItem(name: "payload", value: payloadString)]',
       "",
       "    guard let url = components.url else {",
       "      throw NSError(",
@@ -432,9 +859,12 @@ function renderSwift(
     .filter((intent) => intent.surfaces.appShortcut)
     .map((intent) => {
       const typeName = `${toPascalCase(intent.id)}Intent`;
-      const phrases = [...new Set(intent.phrases.map((phrase) => phrase.appShortcutPhrase))].map(
-        (phrase) => `          "${toSwiftAppShortcutPhrase(phrase)}",`,
+      const parametersByName = new Map(
+        intent.params.map((parameter) => [parameter.name, parameter]),
       );
+      const phrases = [
+        ...new Set(intent.phrases.map((phrase) => phrase.swiftAppShortcutPhrase)),
+      ].map((phrase) => `          "${toSwiftAppShortcutPhrase(phrase, parametersByName)}",`);
 
       return [
         "      AppShortcut(",
@@ -465,30 +895,37 @@ function renderSwift(
 
 function renderAndroidShortcuts(
   intentMetadata: readonly NormalizedIntentMetadata[],
+  entityMetadata: readonly NormalizedEntityMetadata[],
   scheme: string,
   packageName: string,
 ): string {
-  const shortcuts = getAndroidShortcutArtifacts(intentMetadata, scheme).map((shortcut) =>
+  const entitiesById = new Map(entityMetadata.map((entity) => [entity.id, entity]));
+  const shortcuts = getAndroidShortcutArtifacts(intentMetadata, entitiesById, scheme);
+  const capabilityInventoryShortcuts = getAndroidCapabilityInventoryShortcuts(
+    intentMetadata,
+    entityMetadata,
+    scheme,
+  );
+  const capabilities = getAndroidCapabilityArtifacts(intentMetadata).map((capability) =>
     [
-      "    <shortcut",
-      `        android:shortcutId="${escapeXml(shortcut.id)}"`,
-      '        android:enabled="true"',
-      '        android:icon="@mipmap/ic_launcher"',
-      `        android:shortcutShortLabel="@string/${shortcut.shortLabelResourceName}"`,
-      `        android:shortcutLongLabel="@string/${shortcut.longLabelResourceName}">`,
-      "        <intent",
-      '            android:action="android.intent.action.VIEW"',
-      `            android:targetPackage="${escapeXml(packageName)}"`,
-      `            android:targetClass="${escapeXml(`${packageName}.MainActivity`)}"`,
-      `            android:data="${escapeXml(shortcut.url)}" />`,
-      "    </shortcut>",
+      `    <capability android:name="${escapeXml(capability.name)}">`,
+      "        <shortcut-fulfillment>",
+      ...capability.parameterNames.map(
+        (parameterName) => `            <parameter android:name="${escapeXml(parameterName)}" />`,
+      ),
+      "        </shortcut-fulfillment>",
+      "    </capability>",
     ].join("\n"),
+  );
+  const allShortcuts = [...shortcuts, ...capabilityInventoryShortcuts].map((shortcut) =>
+    renderAndroidShortcutXml(shortcut, packageName),
   );
 
   return [
     '<?xml version="1.0" encoding="utf-8"?>',
     '<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">',
-    ...shortcuts,
+    ...capabilities,
+    ...allShortcuts,
     "</shortcuts>",
     "",
   ].join("\n");
@@ -496,9 +933,14 @@ function renderAndroidShortcuts(
 
 function renderAndroidShortcutStrings(
   intentMetadata: readonly NormalizedIntentMetadata[],
+  entityMetadata: readonly NormalizedEntityMetadata[],
   scheme: string,
 ): string {
-  const strings = getAndroidShortcutArtifacts(intentMetadata, scheme).flatMap((shortcut) => [
+  const entitiesById = new Map(entityMetadata.map((entity) => [entity.id, entity]));
+  const strings = [
+    ...getAndroidShortcutArtifacts(intentMetadata, entitiesById, scheme),
+    ...getAndroidCapabilityInventoryShortcuts(intentMetadata, entityMetadata, scheme),
+  ].flatMap((shortcut) => [
     `    <string name="${shortcut.shortLabelResourceName}">${escapeXml(shortcut.shortLabel)}</string>`,
     `    <string name="${shortcut.longLabelResourceName}">${escapeXml(shortcut.longLabel)}</string>`,
   ]);
@@ -649,15 +1091,16 @@ async function writeArtifact(
 
 async function renderArtifacts(config: AppIntentsConfig, cwd: string): Promise<RenderedArtifacts> {
   const intentSources = await loadIntentSources(config.intents, cwd);
-  const normalizedIntents = normalizeIntentDefinitions(
-    intentSources.map((source) => source.intent),
-  );
+  const intents = intentSources.map((source) => source.intent);
+  const normalizedIntents = normalizeIntentDefinitions(intents);
+  const normalizedEntities = normalizeReferencedEntities(intents);
   const artifacts: Array<GeneratedArtifact & { content: string }> = [];
 
   if (config.ios?.output) {
     artifacts.push({
       content: renderSwift(
         normalizedIntents,
+        normalizedEntities,
         config.scheme,
         config.ios.appShortcutsProviderName ?? "GeneratedAppShortcuts",
       ),
@@ -672,12 +1115,17 @@ async function renderArtifacts(config: AppIntentsConfig, cwd: string): Promise<R
     }
 
     artifacts.push({
-      content: renderAndroidShortcuts(normalizedIntents, config.scheme, config.android.packageName),
+      content: renderAndroidShortcuts(
+        normalizedIntents,
+        normalizedEntities,
+        config.scheme,
+        config.android.packageName,
+      ),
       path: resolve(cwd, config.android.shortcutsOutput),
       platform: "android",
     });
     artifacts.push({
-      content: renderAndroidShortcutStrings(normalizedIntents, config.scheme),
+      content: renderAndroidShortcutStrings(normalizedIntents, normalizedEntities, config.scheme),
       path: resolve(cwd, resolveAndroidShortcutStringsOutput(config.android)),
       platform: "android",
     });

@@ -4,11 +4,11 @@ import {
   type LinkingAdapter,
 } from "@react-native-app-intents/react-native";
 
-import { openOrder } from "./orders.intents.js";
+import { openOrder, openSavedOrder } from "./orders.intents.js";
 
-export { openOrder };
+export { openOrder, openSavedOrder };
 
-export const exampleIntents = [openOrder] as const;
+export const exampleIntents = [openOrder, openSavedOrder] as const;
 const nativeModule = getNativeModule();
 const linking = getLinking(nativeModule);
 
@@ -106,8 +106,21 @@ export const exampleRuntime = createAppIntentsRuntime({
   ...(nativeModule ? { nativeModule } : {}),
 });
 
-export function registerExampleRuntime(onOrderOpen: (orderNumber: string) => void): () => void {
-  return exampleRuntime.onIntent(openOrder, ({ orderNumber }) => {
+export function registerExampleRuntime(
+  onOrderOpen: (orderNumber: string) => void,
+  onSavedOrderOpen?: (order: { customer: string; id: number; number: string }) => void,
+): () => void {
+  const unsubscribeOrder = exampleRuntime.onIntent(openOrder, ({ orderNumber }) => {
     onOrderOpen(orderNumber);
   });
+  const unsubscribeSavedOrder = onSavedOrderOpen
+    ? exampleRuntime.onIntent(openSavedOrder, ({ order }) => {
+        onSavedOrderOpen(order);
+      })
+    : () => {};
+
+  return () => {
+    unsubscribeOrder();
+    unsubscribeSavedOrder();
+  };
 }

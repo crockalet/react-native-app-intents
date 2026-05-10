@@ -3,6 +3,7 @@ import type { EntityDefinition, EntityShape } from "./entity.js";
 export type LocalizedText = string | Record<string, string>;
 
 export interface BaseParameterOptions<TValue> {
+  androidBiiParam?: string;
   title?: LocalizedText;
   prompt?: LocalizedText;
   requestValueDialog?: LocalizedText;

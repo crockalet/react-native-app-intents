@@ -21,6 +21,7 @@ export interface EntityDefinition<
 > {
   kind: "entity";
   id: string;
+  inventory?: readonly InferParameterValue<TSchema>[];
   title?: LocalizedText;
   schema: TSchema;
   identifier: (entity: InferParameterValue<TSchema>) => string;

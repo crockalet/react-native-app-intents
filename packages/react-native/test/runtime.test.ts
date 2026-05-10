@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { defineIntent, p } from "@react-native-app-intents/core";
+import { defineEntity, defineIntent, p } from "@react-native-app-intents/core";
 
 import { buildIntentUrl, createAppIntentsRuntime, parseIntentUrl } from "../src/index.js";
 
@@ -114,4 +114,68 @@ test("parseIntentUrl ignores unrelated urls", () => {
   );
 
   assert.equal(parsed, null);
+});
+
+test("runtime serializes and parses entity params", async () => {
+  const Order = defineEntity({
+    id: "Order",
+    title: "Order",
+    inventory: [{ customer: "Taylor", id: 1, number: "1234" }],
+    schema: p.object({
+      id: p.int(),
+      number: p.string(),
+      customer: p.string(),
+    }),
+    identifier: (order) => String(order.id),
+    displayRepresentation: (order) => ({
+      title: `Order #${order.number}`,
+      subtitle: order.customer,
+    }),
+  });
+  const openSavedOrder = defineIntent({
+    id: "openSavedOrder",
+    title: "Open Saved Order",
+    params: {
+      order: p.entity(Order),
+    },
+  });
+  const params = { order: { customer: "Taylor", id: 1, number: "1234" } };
+  const url = buildIntentUrl("example", openSavedOrder, params);
+  const linking = createLinkingAdapter(url);
+  const runtime = createAppIntentsRuntime({
+    scheme: "example",
+    intents: [openSavedOrder] as const,
+    linking: linking.adapter,
+    nativeModule: {
+      async donate() {},
+      async updateDynamicShortcuts() {},
+    },
+  });
+
+  const initialIntent = await runtime.getInitialIntent();
+  const parsed = parseIntentUrl(
+    {
+      scheme: "example",
+      intentsById: new Map([[openSavedOrder.id, openSavedOrder]]),
+    },
+    url,
+  );
+  runtime.dispose();
+
+  assert.equal(
+    url,
+    "example://app-intents/openSavedOrder?payload=%7B%22order%22%3A%7B%22id%22%3A1%2C%22number%22%3A%221234%22%2C%22customer%22%3A%22Taylor%22%7D%7D",
+  );
+  assert.deepEqual(initialIntent, {
+    id: "openSavedOrder",
+    intent: openSavedOrder,
+    params,
+    url,
+  });
+  assert.deepEqual(parsed, {
+    id: "openSavedOrder",
+    intent: openSavedOrder,
+    params,
+    url,
+  });
 });

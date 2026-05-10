@@ -2,4 +2,8 @@
 <resources>
     <string name="react_native_app_intents_open_order_short_label">Open Order</string>
     <string name="react_native_app_intents_open_order_long_label">Open a specific order by number.</string>
+    <string name="react_native_app_intents_open_saved_order_short_label">Open Saved Order</string>
+    <string name="react_native_app_intents_open_saved_order_long_label">Open a saved order from inventory.</string>
+    <string name="react_native_app_intents_open_saved_order_order_1_short_label">Order #1234</string>
+    <string name="react_native_app_intents_open_saved_order_order_1_long_label">Open Saved Order Order #1234</string>
 </resources>

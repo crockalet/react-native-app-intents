@@ -1,4 +1,5 @@
-import type { AnyParameterDefinition, LocalizedText } from "./schema.js";
+import type { EntityDefinition, EntityDisplayRepresentation, EntityShape } from "./entity.js";
+import type { AnyParameterDefinition, LocalizedText, ObjectParameterDefinition } from "./schema.js";
 import type { IntentBehavior, IntentDefinition, IntentSurfaces } from "./intent.js";
 
 const APP_NAME_PLACEHOLDER = "${.applicationName}";
@@ -18,9 +19,11 @@ export interface NormalizedPhraseMetadata {
   appShortcutPhrase: string;
   placeholders: readonly string[];
   raw: string;
+  swiftAppShortcutPhrase: string;
 }
 
 export interface NormalizedParameterMetadata {
+  androidBiiParam?: string;
   defaultValue?: unknown;
   entityId?: string;
   fields?: readonly NormalizedParameterMetadata[];
@@ -30,6 +33,29 @@ export interface NormalizedParameterMetadata {
   optional: boolean;
   prompt?: string;
   requestValueDialog?: string;
+  title: string;
+}
+
+export interface NormalizedEntityInventoryItem<
+  TEntity extends EntityDefinition<any> = EntityDefinition<any>,
+> {
+  displayRepresentation: {
+    imageSystemName?: string;
+    subtitle?: string;
+    title: string;
+  };
+  identifier: string;
+  jsonValue: string;
+  value: EntityShape<TEntity>;
+}
+
+export interface NormalizedEntityMetadata<
+  TEntity extends EntityDefinition<any> = EntityDefinition<any>,
+> {
+  entity: TEntity;
+  id: string;
+  inventory: readonly NormalizedEntityInventoryItem<TEntity>[];
+  schema: TEntity["schema"];
   title: string;
 }
 
@@ -47,8 +73,8 @@ export interface NormalizedIntentMetadata<
   title: string;
 }
 
-function appendIssue(issues: string[], intentId: string, message: string): void {
-  issues.push(`[${intentId}] ${message}`);
+function appendIssue(issues: string[], scopeId: string, message: string): void {
+  issues.push(`[${scopeId}] ${message}`);
 }
 
 function collectPhrasePlaceholders(phrase: string): string[] {
@@ -71,6 +97,7 @@ function normalizeAppShortcutPhrase(
 ): NormalizedPhraseMetadata {
   const placeholders = collectPhrasePlaceholders(rawPhrase);
   let appShortcutPhrase = rawPhrase;
+  let swiftAppShortcutPhrase = rawPhrase;
   let includesApplicationName = false;
 
   for (const placeholder of placeholders) {
@@ -87,19 +114,65 @@ function normalizeAppShortcutPhrase(
   }
 
   appShortcutPhrase = appShortcutPhrase.replace(/\s+/g, " ").trim();
+  swiftAppShortcutPhrase = swiftAppShortcutPhrase.replace(/\s+/g, " ").trim();
 
   if (!includesApplicationName) {
     appShortcutPhrase =
       appShortcutPhrase.length === 0
         ? APP_NAME_PLACEHOLDER
         : `${appShortcutPhrase} in ${APP_NAME_PLACEHOLDER}`;
+    swiftAppShortcutPhrase =
+      swiftAppShortcutPhrase.length === 0
+        ? APP_NAME_PLACEHOLDER
+        : `${swiftAppShortcutPhrase} in ${APP_NAME_PLACEHOLDER}`;
   }
 
   return {
     appShortcutPhrase,
     placeholders,
     raw: rawPhrase,
+    swiftAppShortcutPhrase,
   };
+}
+
+function serializeParameterValue(definition: AnyParameterDefinition, value: unknown): unknown {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  switch (definition.kind) {
+    case "date":
+      return value instanceof Date ? value.toISOString() : value;
+    case "entity":
+      return serializeObjectParameterValue(definition.entity.schema, value);
+    case "object":
+      return serializeObjectParameterValue(definition, value);
+    default:
+      return value;
+  }
+}
+
+function serializeObjectParameterValue(
+  definition: ObjectParameterDefinition<Record<string, AnyParameterDefinition>, boolean>,
+  value: unknown,
+): unknown {
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+
+  const serialized: Record<string, unknown> = {};
+
+  for (const [fieldName, fieldDefinition] of Object.entries(definition.fields) as [
+    string,
+    AnyParameterDefinition,
+  ][]) {
+    serialized[fieldName] = serializeParameterValue(
+      fieldDefinition,
+      (value as Record<string, unknown>)[fieldName],
+    );
+  }
+
+  return serialized;
 }
 
 function normalizeParameterMetadata(
@@ -125,8 +198,12 @@ function normalizeParameterMetadata(
     metadata.requestValueDialog = requestValueDialog;
   }
 
+  if (definition.androidBiiParam) {
+    metadata.androidBiiParam = definition.androidBiiParam;
+  }
+
   if ("default" in definition && definition.default !== undefined) {
-    metadata.defaultValue = definition.default;
+    metadata.defaultValue = serializeParameterValue(definition, definition.default);
   }
 
   if (definition.kind === "object") {
@@ -195,6 +272,68 @@ function normalizeBehavior(behavior: IntentBehavior | undefined): Required<Inten
   };
 }
 
+function normalizeEntityDisplayRepresentation(
+  entity: EntityDefinition<any>,
+  item: EntityShape<EntityDefinition<any>>,
+  index: number,
+  issues: string[],
+): EntityDisplayRepresentation | null {
+  try {
+    const displayRepresentation = entity.displayRepresentation(item);
+
+    if (displayRepresentation.image?.uri) {
+      appendIssue(
+        issues,
+        entity.id,
+        `Inventory item ${index} uses image.uri, which codegen does not support yet.`,
+      );
+    }
+
+    if (!displayRepresentation.title) {
+      appendIssue(issues, entity.id, `Inventory item ${index} must provide a display title.`);
+      return null;
+    }
+
+    return displayRepresentation;
+  } catch (error) {
+    appendIssue(
+      issues,
+      entity.id,
+      `displayRepresentation() threw for inventory item ${index}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return null;
+  }
+}
+
+function normalizeEntityIdentifier(
+  entity: EntityDefinition<any>,
+  item: EntityShape<EntityDefinition<any>>,
+  index: number,
+  issues: string[],
+): string | null {
+  try {
+    const identifier = entity.identifier(item);
+
+    if (typeof identifier !== "string" || identifier.length === 0) {
+      appendIssue(issues, entity.id, `Inventory item ${index} produced an invalid identifier.`);
+      return null;
+    }
+
+    return identifier;
+  } catch (error) {
+    appendIssue(
+      issues,
+      entity.id,
+      `identifier() threw for inventory item ${index}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return null;
+  }
+}
+
 export function resolveLocalizedText(
   value: LocalizedText | undefined,
   fallback?: string,
@@ -216,6 +355,175 @@ export function resolveLocalizedText(
   return typeof firstEntry === "string" ? firstEntry : fallback;
 }
 
+export function normalizeEntityDefinition<TEntity extends EntityDefinition<any>>(
+  entity: TEntity,
+): NormalizedEntityMetadata<TEntity> {
+  const issues: string[] = [];
+  const seenIdentifiers = new Set<string>();
+  const inventory = ((entity.inventory ?? []) as readonly EntityShape<TEntity>[]).flatMap(
+    (item, index): NormalizedEntityInventoryItem<TEntity>[] => {
+      const identifier = normalizeEntityIdentifier(entity, item, index, issues);
+      const displayRepresentation = normalizeEntityDisplayRepresentation(
+        entity,
+        item,
+        index,
+        issues,
+      );
+
+      if (!identifier || !displayRepresentation) {
+        return [];
+      }
+
+      if (seenIdentifiers.has(identifier)) {
+        appendIssue(issues, entity.id, `Duplicate inventory identifier "${identifier}".`);
+        return [];
+      }
+
+      seenIdentifiers.add(identifier);
+
+      return [
+        {
+          displayRepresentation: {
+            ...(displayRepresentation.image?.systemName
+              ? { imageSystemName: displayRepresentation.image.systemName }
+              : {}),
+            ...(displayRepresentation.subtitle ? { subtitle: displayRepresentation.subtitle } : {}),
+            title: displayRepresentation.title,
+          },
+          identifier,
+          jsonValue: JSON.stringify(
+            serializeObjectParameterValue(
+              entity.schema as ObjectParameterDefinition<
+                Record<string, AnyParameterDefinition>,
+                boolean
+              >,
+              item,
+            ) as Record<string, unknown>,
+          ),
+          value: item,
+        } satisfies NormalizedEntityInventoryItem<TEntity>,
+      ];
+    },
+  );
+
+  if (issues.length > 0) {
+    throw new AppIntentsValidationError(issues);
+  }
+
+  return {
+    entity,
+    id: entity.id,
+    inventory,
+    schema: entity.schema,
+    title: resolveLocalizedText(entity.title, entity.id) ?? entity.id,
+  };
+}
+
+function collectReferencedEntitiesFromParameter(
+  definition: AnyParameterDefinition,
+  entitiesById: Map<string, EntityDefinition<any>>,
+  issues: string[],
+  stack: readonly string[] = [],
+): void {
+  if (definition.kind === "object") {
+    for (const field of Object.values(definition.fields)) {
+      collectReferencedEntitiesFromParameter(field, entitiesById, issues, stack);
+    }
+
+    return;
+  }
+
+  if (definition.kind !== "entity") {
+    return;
+  }
+
+  const entity = definition.entity;
+  const existing = entitiesById.get(entity.id);
+
+  if (existing && existing !== entity) {
+    appendIssue(issues, entity.id, "Duplicate entity id detected across referenced definitions.");
+    return;
+  }
+
+  if (stack.includes(entity.id)) {
+    appendIssue(
+      issues,
+      entity.id,
+      `Entity schema references itself recursively through ${[...stack, entity.id].join(" -> ")}.`,
+    );
+    return;
+  }
+
+  if (!existing) {
+    entitiesById.set(entity.id, entity);
+  }
+
+  const nextStack = [...stack, entity.id];
+
+  for (const field of Object.values(entity.schema.fields) as AnyParameterDefinition[]) {
+    collectReferencedEntitiesFromParameter(field, entitiesById, issues, nextStack);
+  }
+}
+
+function validateIntentEntities(
+  intent: IntentDefinition<any>,
+  surfaces: Required<IntentSurfaces>,
+  issues: string[],
+): void {
+  const params = Object.values(intent.params) as AnyParameterDefinition[];
+  const entityParams = params.filter(
+    (definition): definition is Extract<AnyParameterDefinition, { kind: "entity" }> =>
+      definition.kind === "entity",
+  );
+
+  if (surfaces.appShortcut) {
+    for (const definition of entityParams) {
+      if (!definition.entity.inventory || definition.entity.inventory.length === 0) {
+        appendIssue(
+          issues,
+          intent.id,
+          `Entity parameter "${definition.entity.id}" needs static inventory for App Shortcut codegen.`,
+        );
+      }
+    }
+  }
+
+  if (!intent.androidBii) {
+    return;
+  }
+
+  if (entityParams.length > 1) {
+    appendIssue(
+      issues,
+      intent.id,
+      "Android BII codegen currently supports at most one entity parameter per intent.",
+    );
+  }
+
+  for (const [paramName, definition] of Object.entries(intent.params) as [
+    string,
+    AnyParameterDefinition,
+  ][]) {
+    if (!definition.androidBiiParam) {
+      appendIssue(
+        issues,
+        intent.id,
+        `Parameter "${paramName}" must declare androidBiiParam when androidBii is set.`,
+      );
+    }
+
+    if (definition.kind === "entity") {
+      if (!definition.entity.inventory || definition.entity.inventory.length === 0) {
+        appendIssue(
+          issues,
+          intent.id,
+          `Entity parameter "${paramName}" needs static inventory for Android capability generation.`,
+        );
+      }
+    }
+  }
+}
+
 export function normalizeIntentDefinition<TIntent extends IntentDefinition<any>>(
   intent: TIntent,
 ): NormalizedIntentMetadata<TIntent> {
@@ -229,6 +537,8 @@ export function normalizeIntentDefinition<TIntent extends IntentDefinition<any>>
   if (surfaces.appShortcut && phrases.length === 0) {
     appendIssue(issues, intent.id, "App Shortcut intents must declare at least one phrase.");
   }
+
+  validateIntentEntities(intent, surfaces, issues);
 
   if (issues.length > 0) {
     throw new AppIntentsValidationError(issues);
@@ -282,4 +592,23 @@ export function normalizeIntentDefinitions<TIntents extends readonly IntentDefin
   }
 
   return normalized;
+}
+
+export function normalizeReferencedEntities<TIntents extends readonly IntentDefinition<any>[]>(
+  intents: TIntents,
+): readonly NormalizedEntityMetadata[] {
+  const entitiesById = new Map<string, EntityDefinition<any>>();
+  const issues: string[] = [];
+
+  for (const intent of intents) {
+    for (const definition of Object.values(intent.params) as AnyParameterDefinition[]) {
+      collectReferencedEntitiesFromParameter(definition, entitiesById, issues);
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new AppIntentsValidationError(issues);
+  }
+
+  return [...entitiesById.values()].map((entity) => normalizeEntityDefinition(entity));
 }

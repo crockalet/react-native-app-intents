@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <capability android:name="actions.intent.GET_ORDER">
+        <shortcut-fulfillment>
+            <parameter android:name="order" />
+        </shortcut-fulfillment>
+    </capability>
     <shortcut
         android:shortcutId="openOrder"
         android:enabled="true"
@@ -11,5 +16,35 @@
             android:targetPackage="com.crockalet.appintents.example"
             android:targetClass="com.crockalet.appintents.example.MainActivity"
             android:data="example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%221234%22%7D" />
+        <capability-binding android:key="actions.intent.GET_ORDER">
+            <parameter-binding android:key="order" android:value="1234" />
+        </capability-binding>
+    </shortcut>
+    <shortcut
+        android:shortcutId="openSavedOrder"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/react_native_app_intents_open_saved_order_short_label"
+        android:shortcutLongLabel="@string/react_native_app_intents_open_saved_order_long_label">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.crockalet.appintents.example"
+            android:targetClass="com.crockalet.appintents.example.MainActivity"
+            android:data="example://app-intents/openSavedOrder?payload=%7B%22order%22%3A%7B%22id%22%3A1%2C%22number%22%3A%221234%22%2C%22customer%22%3A%22Taylor%22%7D%7D" />
+        <capability-binding android:key="actions.intent.GET_ORDER">
+            <parameter-binding android:key="order" android:value="Order #1234" />
+        </capability-binding>
+    </shortcut>
+    <shortcut
+        android:shortcutId="openSavedOrder_Order_1"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/react_native_app_intents_open_saved_order_order_1_short_label"
+        android:shortcutLongLabel="@string/react_native_app_intents_open_saved_order_order_1_long_label">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.crockalet.appintents.example"
+            android:targetClass="com.crockalet.appintents.example.MainActivity"
+            android:data="example://app-intents/openSavedOrder?payload=%7B%22order%22%3A%7B%22customer%22%3A%22Taylor%22%2C%22id%22%3A1%2C%22number%22%3A%221234%22%7D%7D" />
     </shortcut>
 </shortcuts>
