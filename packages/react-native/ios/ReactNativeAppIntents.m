@@ -2,8 +2,30 @@
 
 #import <UIKit/UIKit.h>
 
-static NSString *ReactNativeAppIntentsPendingURL = nil;
+static NSMutableArray<NSString *> *ReactNativeAppIntentsPendingURLs = nil;
 static __weak ReactNativeAppIntents *ReactNativeAppIntentsCurrentModule = nil;
+static NSString *const ReactNativeAppIntentsPendingURLsDefaultsKey = @"ReactNativeAppIntentsPendingURLs";
+
+static void ReactNativeAppIntentsEnsurePendingQueue(void)
+{
+  if (ReactNativeAppIntentsPendingURLs == nil) {
+    ReactNativeAppIntentsPendingURLs = [NSMutableArray new];
+  }
+}
+
+static void ReactNativeAppIntentsImportPersistedPendingURLs(void)
+{
+  NSArray<NSString *> *persistedURLs =
+    [[NSUserDefaults standardUserDefaults] stringArrayForKey:ReactNativeAppIntentsPendingURLsDefaultsKey];
+
+  if (persistedURLs.count == 0) {
+    return;
+  }
+
+  ReactNativeAppIntentsEnsurePendingQueue();
+  [ReactNativeAppIntentsPendingURLs addObjectsFromArray:persistedURLs];
+  [[NSUserDefaults standardUserDefaults] removeObjectForKey:ReactNativeAppIntentsPendingURLsDefaultsKey];
+}
 
 @implementation ReactNativeAppIntents
 
@@ -39,6 +61,7 @@ RCT_EXPORT_MODULE(ReactNativeAppIntents)
 
 - (void)startObserving
 {
+  ReactNativeAppIntentsImportPersistedPendingURLs();
   [self emitPendingIntentURLIfNeeded];
 }
 
@@ -66,8 +89,13 @@ RCT_REMAP_METHOD(
   rejecter:(RCTPromiseRejectBlock)reject
 )
 {
-  NSString *url = ReactNativeAppIntentsPendingURL;
-  ReactNativeAppIntentsPendingURL = nil;
+  ReactNativeAppIntentsImportPersistedPendingURLs();
+  NSString *url = ReactNativeAppIntentsPendingURLs.firstObject;
+
+  if (url != nil) {
+    [ReactNativeAppIntentsPendingURLs removeObjectAtIndex:0];
+  }
+
   resolve(url);
 }
 
@@ -107,7 +135,11 @@ RCT_REMAP_METHOD(
     return;
   }
 
-  ReactNativeAppIntentsPendingURL = [url copy];
+  if (ReactNativeAppIntentsPendingURLs == nil) {
+    ReactNativeAppIntentsEnsurePendingQueue();
+  }
+
+  [ReactNativeAppIntentsPendingURLs addObject:[url copy]];
 
   if (ReactNativeAppIntentsCurrentModule != nil) {
     [ReactNativeAppIntentsCurrentModule emitPendingIntentURLIfNeeded];
@@ -116,11 +148,13 @@ RCT_REMAP_METHOD(
 
 - (void)emitPendingIntentURLIfNeeded
 {
-  if (ReactNativeAppIntentsPendingURL == nil) {
+  NSString *url = ReactNativeAppIntentsPendingURLs.firstObject;
+
+  if (url == nil) {
     return;
   }
 
-  [self sendEventWithName:@"appIntentUrl" body:@{ @"url": ReactNativeAppIntentsPendingURL }];
+  [self sendEventWithName:@"appIntentUrl" body:@{ @"url": url }];
 }
 
 @end

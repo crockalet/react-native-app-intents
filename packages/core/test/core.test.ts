@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { defineEntity, defineIntent, p, type ParamsOf } from "../src/index.js";
+import {
+  defineEntity,
+  defineIntent,
+  normalizeIntentDefinitions,
+  p,
+  type ParamsOf,
+} from "../src/index.js";
 
 test("defineIntent preserves typed params", () => {
   const openOrder = defineIntent({
@@ -51,4 +57,22 @@ test("defineEntity captures object shapes", async () => {
   const results = await Order.query?.({});
 
   assert.equal(results?.[0]?.number, "1234");
+});
+
+test("normalizeIntentDefinitions derives app shortcut phrases", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    phrases: ["Show my order ${orderNumber}"],
+    params: {
+      orderNumber: p.string(),
+    },
+    surfaces: {
+      appShortcut: true,
+    },
+  });
+
+  const [normalized] = normalizeIntentDefinitions([openOrder]);
+
+  assert.equal(normalized?.phrases[0]?.appShortcutPhrase, "Show my order in ${.applicationName}");
 });

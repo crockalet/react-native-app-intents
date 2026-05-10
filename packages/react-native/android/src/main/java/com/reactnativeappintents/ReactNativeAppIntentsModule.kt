@@ -13,6 +13,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import java.lang.ref.WeakReference
+import java.util.ArrayDeque
 
 class ReactNativeAppIntentsModule(
   reactContext: ReactApplicationContext,
@@ -31,8 +32,7 @@ class ReactNativeAppIntentsModule(
 
   @ReactMethod
   fun getInitialIntentURL(promise: Promise) {
-    val currentUrl = pendingUrl
-    pendingUrl = null
+    val currentUrl = if (pendingUrls.isEmpty()) null else pendingUrls.removeFirst()
     promise.resolve(currentUrl)
   }
 
@@ -79,7 +79,7 @@ class ReactNativeAppIntentsModule(
 
   companion object {
     const val NAME = "ReactNativeAppIntents"
-    private var pendingUrl: String? = null
+    private val pendingUrls = ArrayDeque<String>()
     private var reactContextRef: WeakReference<ReactApplicationContext>? = null
 
     fun handleIntent(intent: Intent?) {
@@ -91,7 +91,7 @@ class ReactNativeAppIntentsModule(
         return
       }
 
-      pendingUrl = url
+      pendingUrls.addLast(url)
 
       val reactContext = reactContextRef?.get() ?: return
       val payload = com.facebook.react.bridge.Arguments.createMap().apply {

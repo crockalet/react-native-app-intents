@@ -12,9 +12,7 @@ export const exampleIntents = [openOrder] as const;
 const nativeModule = getNativeModule();
 const linking = getLinking(nativeModule);
 
-declare const require:
-  | undefined
-  | ((specifier: string) => unknown);
+declare const require: undefined | ((specifier: string) => unknown);
 
 function getNativeModule(): AppIntentsNativeModule | undefined {
   if (typeof require !== "function") {
@@ -27,24 +25,20 @@ function getNativeModule(): AppIntentsNativeModule | undefined {
     };
   };
 
-  return reactNative.TurboModuleRegistry?.get<AppIntentsNativeModule>(
-    "ReactNativeAppIntents",
-  ) ?? undefined;
+  return (
+    reactNative.TurboModuleRegistry?.get<AppIntentsNativeModule>("ReactNativeAppIntents") ??
+    undefined
+  );
 }
 
-function getLinking(
-  nativeModule: AppIntentsNativeModule | undefined,
-): LinkingAdapter | undefined {
+function getLinking(nativeModule: AppIntentsNativeModule | undefined): LinkingAdapter | undefined {
   if (typeof require !== "function") {
     return undefined;
   }
 
   const reactNative = require("react-native") as {
     AppState: {
-      addEventListener(
-        event: "change",
-        listener: (state: string) => void,
-      ): { remove(): void };
+      addEventListener(event: "change", listener: (state: string) => void): { remove(): void };
     };
     Linking: LinkingAdapter;
     NativeEventEmitter: new (module: unknown) => {
@@ -54,9 +48,7 @@ function getLinking(
       ): { remove(): void };
     };
   };
-  const nativeEmitter = nativeModule
-    ? new reactNative.NativeEventEmitter(nativeModule)
-    : null;
+  const nativeEmitter = nativeModule ? new reactNative.NativeEventEmitter(nativeModule) : null;
 
   return {
     addEventListener(_event, listener) {
@@ -74,9 +66,7 @@ function getLinking(
       };
 
       if (nativeEmitter) {
-        subscriptions.push(
-          nativeEmitter.addListener("appIntentUrl", listener),
-        );
+        subscriptions.push(nativeEmitter.addListener("appIntentUrl", listener));
       }
 
       subscriptions.push(
@@ -116,9 +106,7 @@ export const exampleRuntime = createAppIntentsRuntime({
   ...(nativeModule ? { nativeModule } : {}),
 });
 
-export function registerExampleRuntime(
-  onOrderOpen: (orderNumber: string) => void,
-): () => void {
+export function registerExampleRuntime(onOrderOpen: (orderNumber: string) => void): () => void {
   return exampleRuntime.onIntent(openOrder, ({ orderNumber }) => {
     onOrderOpen(orderNumber);
   });

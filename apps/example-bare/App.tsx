@@ -73,8 +73,7 @@ function AppContent(): ReactElement {
       <Text style={styles.eyebrow}>react-native-app-intents</Text>
       <Text style={styles.heading}>Bare React Native reference app</Text>
       <Text style={styles.body}>
-        This screen logs app-intent callbacks delivered through the shared JS
-        runtime.
+        This screen logs app-intent callbacks delivered through the shared JS runtime.
       </Text>
 
       <View style={styles.card}>

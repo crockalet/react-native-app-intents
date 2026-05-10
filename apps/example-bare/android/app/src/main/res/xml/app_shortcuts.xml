@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
-        android:shortcutId="open_order_demo"
+        android:shortcutId="openOrder"
         android:enabled="true"
         android:icon="@mipmap/ic_launcher"
-        android:shortcutShortLabel="@string/shortcut_open_order_short"
-        android:shortcutLongLabel="@string/shortcut_open_order_long">
+        android:shortcutShortLabel="@string/react_native_app_intents_open_order_short_label"
+        android:shortcutLongLabel="@string/react_native_app_intents_open_order_long_label">
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="com.crockalet.appintents.example"

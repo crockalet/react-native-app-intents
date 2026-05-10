@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="react_native_app_intents_open_order_short_label">Open Order</string>
+    <string name="react_native_app_intents_open_order_long_label">Open a specific order by number.</string>
+</resources>

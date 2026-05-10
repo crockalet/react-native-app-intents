@@ -1,29 +1,34 @@
 import AppIntents
 import Foundation
 
-@available(iOS 18.0, *)
+private let reactNativeAppIntentsPendingURLsKey = "ReactNativeAppIntentsPendingURLs"
+
+private func enqueueReactNativeAppIntentURL(_ url: URL) {
+  let defaults = UserDefaults.standard
+  var pendingUrls = defaults.stringArray(forKey: reactNativeAppIntentsPendingURLsKey) ?? []
+  pendingUrls.append(url.absoluteString)
+  defaults.set(pendingUrls, forKey: reactNativeAppIntentsPendingURLsKey)
+}
+
+@available(iOS 16.0, *)
 private struct OpenOrderPayload: Encodable {
   let orderNumber: String
 }
 
-@available(iOS 18.0, *)
+@available(iOS 16.0, *)
 struct OpenOrderIntent: AppIntent {
   static let title: LocalizedStringResource = "Open Order"
-  static let description = IntentDescription(
-    "Open a specific order inside the React Native example app."
-  )
+  static let description = IntentDescription("Open a specific order by number.")
   static let openAppWhenRun = true
 
   @Parameter(
-    title: "Order Number",
-    requestValueDialog: IntentDialog("Which order would you like to open?")
+    title: "Order number",
+    requestValueDialog: IntentDialog("What's the order number?")
   )
   var orderNumber: String
 
-  func perform() async throws -> some IntentResult & OpensIntent {
-    let payload = try JSONEncoder().encode(
-      OpenOrderPayload(orderNumber: orderNumber)
-    )
+  func perform() async throws -> some IntentResult {
+    let payload = try JSONEncoder().encode(OpenOrderPayload(orderNumber: orderNumber))
     let payloadString = String(decoding: payload, as: UTF8.self)
     var components = URLComponents()
     components.scheme = "example"
@@ -41,11 +46,12 @@ struct OpenOrderIntent: AppIntent {
       )
     }
 
-    return .result(opensIntent: OpenURLIntent(url))
+    enqueueReactNativeAppIntentURL(url)
+    return .result()
   }
 }
 
-@available(iOS 18.0, *)
+@available(iOS 16.0, *)
 struct ExampleAppShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     return [
@@ -56,7 +62,7 @@ struct ExampleAppShortcuts: AppShortcutsProvider {
           "Show my order in \(.applicationName)",
         ],
         shortTitle: "Open Order",
-        systemImageName: "shippingbox"
+        systemImageName: "square.grid.2x2"
       ),
     ]
   }

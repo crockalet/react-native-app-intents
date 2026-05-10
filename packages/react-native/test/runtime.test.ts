@@ -3,11 +3,7 @@ import test from "node:test";
 
 import { defineIntent, p } from "@react-native-app-intents/core";
 
-import {
-  buildIntentUrl,
-  createAppIntentsRuntime,
-  parseIntentUrl,
-} from "../src/index.js";
+import { buildIntentUrl, createAppIntentsRuntime, parseIntentUrl } from "../src/index.js";
 
 function createLinkingAdapter(initialUrl: string | null = null) {
   let currentInitialUrl = initialUrl;
@@ -15,10 +11,7 @@ function createLinkingAdapter(initialUrl: string | null = null) {
 
   return {
     adapter: {
-      addEventListener(
-        _event: "url",
-        nextListener: (event: { url: string }) => void,
-      ) {
+      addEventListener(_event: "url", nextListener: (event: { url: string }) => void) {
         listener = nextListener;
         return {
           remove() {
@@ -93,10 +86,7 @@ test("runtime parses initial urls and emits typed handlers", async () => {
     params: { orderNumber: "1234" },
     url: "example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%221234%22%7D",
   });
-  assert.equal(
-    donated[0],
-    'openOrder:{"orderNumber":"5678"}',
-  );
+  assert.equal(donated[0], 'openOrder:{"orderNumber":"5678"}');
   assert.deepEqual(shortcutUpdates[0], [
     {
       id: "openOrder",

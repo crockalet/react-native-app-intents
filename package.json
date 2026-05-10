@@ -13,7 +13,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint .",
-    "test": "bun test packages example",
+    "test": "for dir in packages/*; do (cd \"$dir\" && bun test) || exit 1; done",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

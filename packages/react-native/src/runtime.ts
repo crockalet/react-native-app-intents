@@ -3,18 +3,13 @@ import type {
   IntentDefinition,
   ParamsOf,
 } from "@react-native-app-intents/core";
-import type {
-  AppIntentsNativeModule,
-  NativeShortcutPayload,
-} from "./native.js";
+import type { AppIntentsNativeModule, NativeShortcutPayload } from "./native.js";
 
 type MaybePromise = void | Promise<void>;
 
 type IntentTuple = readonly IntentDefinition<any>[];
 
-export type IntentEvent<
-  TIntent extends IntentDefinition<any> = IntentDefinition<any>,
-> = {
+export type IntentEvent<TIntent extends IntentDefinition<any> = IntentDefinition<any>> = {
   id: TIntent["id"];
   intent: TIntent;
   params: ParamsOf<TIntent>;
@@ -27,9 +22,7 @@ export type IntentEventUnion<TIntents extends IntentTuple> = {
     : never;
 }[number];
 
-export interface DynamicShortcut<
-  TIntent extends IntentDefinition<any> = IntentDefinition<any>,
-> {
+export interface DynamicShortcut<TIntent extends IntentDefinition<any> = IntentDefinition<any>> {
   id?: string;
   intent: TIntent;
   params: ParamsOf<TIntent>;
@@ -38,10 +31,7 @@ export interface DynamicShortcut<
 }
 
 export interface LinkingAdapter {
-  addEventListener(
-    event: "url",
-    listener: (event: { url: string }) => void,
-  ): { remove(): void };
+  addEventListener(event: "url", listener: (event: { url: string }) => void): { remove(): void };
   getInitialURL(): Promise<string | null>;
 }
 
@@ -61,33 +51,27 @@ interface TurboModuleRegistryLike {
   get<TModule>(name: string): TModule | null;
 }
 
-declare const require:
-  | undefined
-  | ((specifier: string) => unknown);
+declare const require: undefined | ((specifier: string) => unknown);
 
-function getReactNativeAppIntentsModule(
-  reactNative: {
-    NativeModules?: {
-      ReactNativeAppIntents?: AppIntentsNativeModule;
-    };
-    TurboModuleRegistry?: TurboModuleRegistryLike;
-  },
-): AppIntentsNativeModule | undefined {
+function getReactNativeAppIntentsModule(reactNative: {
+  NativeModules?: {
+    ReactNativeAppIntents?: AppIntentsNativeModule;
+  };
+  TurboModuleRegistry?: TurboModuleRegistryLike;
+}): AppIntentsNativeModule | undefined {
   const nativeModule = reactNative.NativeModules?.ReactNativeAppIntents;
 
   if (nativeModule) {
     return nativeModule;
   }
 
-  return reactNative.TurboModuleRegistry?.get<AppIntentsNativeModule>(
-    "ReactNativeAppIntents",
-  )
-    ?? undefined;
+  return (
+    reactNative.TurboModuleRegistry?.get<AppIntentsNativeModule>("ReactNativeAppIntents") ??
+    undefined
+  );
 }
 
-function getDefaultLinking(
-  providedNativeModule?: AppIntentsNativeModule,
-): LinkingAdapter {
+function getDefaultLinking(providedNativeModule?: AppIntentsNativeModule): LinkingAdapter {
   if (typeof require !== "function") {
     return {
       addEventListener(): { remove(): void } {
@@ -103,10 +87,7 @@ function getDefaultLinking(
 
   const reactNative = require("react-native") as {
     AppState: {
-      addEventListener(
-        event: "change",
-        listener: (state: string) => void,
-      ): { remove(): void };
+      addEventListener(event: "change", listener: (state: string) => void): { remove(): void };
     };
     NativeEventEmitter: new (module: unknown) => {
       addListener(
@@ -120,11 +101,8 @@ function getDefaultLinking(
     };
     TurboModuleRegistry?: TurboModuleRegistryLike;
   };
-  const nativeModule
-    = providedNativeModule ?? getReactNativeAppIntentsModule(reactNative);
-  const nativeEmitter = nativeModule
-    ? new reactNative.NativeEventEmitter(nativeModule)
-    : null;
+  const nativeModule = providedNativeModule ?? getReactNativeAppIntentsModule(reactNative);
+  const nativeEmitter = nativeModule ? new reactNative.NativeEventEmitter(nativeModule) : null;
 
   return {
     addEventListener(_event, listener) {
@@ -142,9 +120,7 @@ function getDefaultLinking(
       };
 
       if (nativeEmitter) {
-        subscriptions.push(
-          nativeEmitter.addListener("appIntentUrl", listener),
-        );
+        subscriptions.push(nativeEmitter.addListener("appIntentUrl", listener));
       }
 
       subscriptions.push(
@@ -221,10 +197,7 @@ function resolveLocalizedText(
   return typeof firstEntry === "string" ? firstEntry : fallback;
 }
 
-function serializeParameterValue(
-  definition: AnyParameterDefinition,
-  value: unknown,
-): unknown {
+function serializeParameterValue(definition: AnyParameterDefinition, value: unknown): unknown {
   if (value === undefined) {
     return undefined;
   }
@@ -240,10 +213,7 @@ function serializeParameterValue(
       const serialized: Record<string, unknown> = {};
 
       for (const [key, field] of Object.entries(definition.fields)) {
-        serialized[key] = serializeParameterValue(
-          field,
-          (value as Record<string, unknown>)[key],
-        );
+        serialized[key] = serializeParameterValue(field, (value as Record<string, unknown>)[key]);
       }
 
       return serialized;
@@ -253,10 +223,7 @@ function serializeParameterValue(
   }
 }
 
-function deserializeParameterValue(
-  definition: AnyParameterDefinition,
-  value: unknown,
-): unknown {
+function deserializeParameterValue(definition: AnyParameterDefinition, value: unknown): unknown {
   if (value === undefined || value === null) {
     return value;
   }
@@ -288,10 +255,7 @@ function deserializeParameterValue(
       const parsed: Record<string, unknown> = {};
 
       for (const [key, field] of Object.entries(definition.fields)) {
-        parsed[key] = deserializeParameterValue(
-          field,
-          (value as Record<string, unknown>)[key],
-        );
+        parsed[key] = deserializeParameterValue(field, (value as Record<string, unknown>)[key]);
       }
 
       return parsed;
@@ -384,9 +348,7 @@ export function buildIntentUrl<TIntent extends IntentDefinition<any>>(
   intent: TIntent,
   params: ParamsOf<TIntent>,
 ): string {
-  const payload = encodeURIComponent(
-    JSON.stringify(serializeIntentParams(intent, params)),
-  );
+  const payload = encodeURIComponent(JSON.stringify(serializeIntentParams(intent, params)));
 
   return `${scheme}://app-intents/${encodeURIComponent(intent.id)}?payload=${payload}`;
 }
@@ -401,11 +363,12 @@ export function parseIntentUrl<TIntents extends IntentTuple>(
     return null;
   }
 
-  const pathSegments = parsedUrl.host === "app-intents"
-    ? parsedUrl.pathSegments
-    : parsedUrl.pathSegments[0] === "app-intents"
-      ? parsedUrl.pathSegments.slice(1)
-      : [];
+  const pathSegments =
+    parsedUrl.host === "app-intents"
+      ? parsedUrl.pathSegments
+      : parsedUrl.pathSegments[0] === "app-intents"
+        ? parsedUrl.pathSegments.slice(1)
+        : [];
   const [intentId] = pathSegments;
 
   if (!intentId) {
@@ -427,38 +390,25 @@ export function parseIntentUrl<TIntents extends IntentTuple>(
   return {
     id: intent.id,
     intent,
-    params: deserializeIntentParams(
-      intent,
-      payload as Record<string, unknown>,
-    ),
+    params: deserializeIntentParams(intent, payload as Record<string, unknown>),
     url,
   } as IntentEventUnion<TIntents>;
 }
 
 export interface AppIntentsRuntime<TIntents extends IntentTuple> {
-  buildUrl<TIntent extends TIntents[number]>(
-    intent: TIntent,
-    params: ParamsOf<TIntent>,
-  ): string;
+  buildUrl<TIntent extends TIntents[number]>(intent: TIntent, params: ParamsOf<TIntent>): string;
   dispose(): void;
   donate<TIntent extends TIntents[number]>(
     intent: TIntent,
     params: ParamsOf<TIntent>,
   ): Promise<void>;
   getInitialIntent(): Promise<IntentEventUnion<TIntents> | null>;
-  onAnyIntent(
-    handler: (event: IntentEventUnion<TIntents>) => MaybePromise,
-  ): () => void;
+  onAnyIntent(handler: (event: IntentEventUnion<TIntents>) => MaybePromise): () => void;
   onIntent<TIntent extends TIntents[number]>(
     intent: TIntent,
-    handler: (
-      params: ParamsOf<TIntent>,
-      event: IntentEvent<TIntent>,
-    ) => MaybePromise,
+    handler: (params: ParamsOf<TIntent>, event: IntentEvent<TIntent>) => MaybePromise,
   ): () => void;
-  updateDynamicShortcuts(
-    shortcuts: readonly DynamicShortcut<TIntents[number]>[],
-  ): Promise<void>;
+  updateDynamicShortcuts(shortcuts: readonly DynamicShortcut<TIntents[number]>[]): Promise<void>;
 }
 
 export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
@@ -468,14 +418,10 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
   const linking = options.linking ?? getDefaultLinking(nativeModule);
   const context: RuntimeContext<TIntents> = {
     scheme: options.scheme,
-    intentsById: new Map(
-      options.intents.map((intent) => [intent.id, intent]),
-    ),
+    intentsById: new Map(options.intents.map((intent) => [intent.id, intent])),
   };
 
-  const anyIntentHandlers = new Set<
-    (event: IntentEventUnion<TIntents>) => MaybePromise
-  >();
+  const anyIntentHandlers = new Set<(event: IntentEventUnion<TIntents>) => MaybePromise>();
   const intentHandlers = new Map<
     string,
     Set<(event: IntentEventUnion<TIntents>) => MaybePromise>
@@ -533,10 +479,7 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
     },
 
     async donate(intent, params) {
-      await nativeModule.donate(
-        intent.id,
-        JSON.stringify(serializeIntentParams(intent, params)),
-      );
+      await nativeModule.donate(intent.id, JSON.stringify(serializeIntentParams(intent, params)));
     },
 
     async getInitialIntent() {
@@ -577,13 +520,8 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
         const payload: NativeShortcutPayload = {
           id: shortcut.id ?? shortcut.intent.id,
           title:
-            shortcut.shortTitle
-            ?? resolveLocalizedText(shortcut.intent.title, shortcut.intent.id),
-          url: buildIntentUrl(
-            options.scheme,
-            shortcut.intent,
-            shortcut.params,
-          ),
+            shortcut.shortTitle ?? resolveLocalizedText(shortcut.intent.title, shortcut.intent.id),
+          url: buildIntentUrl(options.scheme, shortcut.intent, shortcut.params),
         };
 
         if (shortcut.longTitle) {

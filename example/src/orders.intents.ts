@@ -7,6 +7,7 @@ export const openOrder = defineIntent({
   phrases: ["Open order ${orderNumber} in ${.applicationName}", "Show my order ${orderNumber}"],
   params: {
     orderNumber: p.string({
+      default: "1234",
       title: "Order number",
       prompt: "Which order?",
       requestValueDialog: "What's the order number?",

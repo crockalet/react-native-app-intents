@@ -8,6 +8,7 @@ export interface IOSAppIntentsConfig {
 export interface AndroidAppIntentsConfig {
   manifest?: string;
   shortcutsOutput: string;
+  shortcutsStringsOutput?: string;
   packageName?: string;
 }
 
