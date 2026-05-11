@@ -1,0 +1,18 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@react-native-app-intents/example": ["../../example/src/index.ts"],
+      "react-native-app-intents": ["../../packages/react-native/src/index.ts"],
+      "react-native-app-intents/codegen": ["../../packages/react-native/src/codegen/index.ts"],
+      "react-native-app-intents/core": ["../../packages/react-native/src/core/index.ts"],
+      "react-native-app-intents/expo-plugin": [
+        "../../packages/react-native/src/expo-plugin/index.ts"
+      ]
+    },
+    "types": ["jest"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["**/node_modules", "**/Pods"]
+}

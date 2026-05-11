@@ -21,10 +21,14 @@
     "baseUrl": ".",
     "types": ["node"],
     "paths": {
+      "react-native-app-intents": ["packages/react-native/src/index.ts"],
+      "react-native-app-intents/codegen": ["packages/react-native/src/codegen/index.ts"],
+      "react-native-app-intents/cli": ["packages/react-native/src/cli/index.ts"],
+      "react-native-app-intents/core": ["packages/react-native/src/core/index.ts"],
+      "react-native-app-intents/expo-plugin": ["packages/react-native/src/expo-plugin/index.ts"],
       "@react-native-app-intents/core": ["packages/core/src/index.ts"],
       "@react-native-app-intents/codegen": ["packages/codegen/src/index.ts"],
       "@react-native-app-intents/cli": ["packages/cli/src/index.ts"],
-      "@react-native-app-intents/react-native": ["packages/react-native/src/index.ts"],
       "@react-native-app-intents/expo-plugin": ["packages/expo-plugin/src/index.ts"]
     }
   }

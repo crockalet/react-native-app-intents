@@ -1,9 +1,10 @@
 {
-  "name": "react-native-app-intents",
+  "name": "react-native-app-intents-monorepo",
   "private": true,
   "workspaces": [
     "packages/*",
-    "example"
+    "example",
+    "apps/*"
   ],
   "type": "module",
   "scripts": {
@@ -12,7 +13,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint .",
-    "test": "bun test",
+    "test": "for dir in packages/*; do (cd \"$dir\" && bun test) || exit 1; done",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

@@ -1,10 +1,12 @@
 {
   "name": "@react-native-app-intents/expo-plugin",
   "version": "0.0.0",
+  "private": true,
   "description": "Expo-oriented wrappers around the shared react-native-app-intents codegen.",
   "license": "MIT",
   "files": [
-    "dist"
+    "dist",
+    "app.plugin.js"
   ],
   "type": "module",
   "sideEffects": false,
@@ -21,6 +23,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@expo/config-plugins": "^55.0.8",
     "@react-native-app-intents/codegen": "workspace:*"
   }
 }

@@ -1,18 +1,19 @@
-import { defineAppIntentsConfig } from "@react-native-app-intents/codegen";
+import { defineAppIntentsConfig } from "react-native-app-intents/codegen";
 
 export default defineAppIntentsConfig({
   intents: ["src/**/*.intents.ts"],
   scheme: "example",
   ios: {
-    output: "ios/AppIntents/GeneratedAppIntents.swift",
-    appShortcutsProviderName: "ExampleShortcuts",
-    bundleIdentifier: "com.example.appintents",
+    output: "../apps/example-bare/ios/AppIntentsBareExample/AppShortcuts.swift",
+    appGroupIdentifier: "group.com.crockalet.appintents.example",
+    appShortcutsProviderName: "ExampleAppShortcuts",
+    bundleIdentifier: "com.crockalet.appintents.example",
     siriUsageDescription: "Used to let Siri run example app actions.",
   },
   android: {
-    manifest: "android/app/src/main/AndroidManifest.xml",
-    shortcutsOutput: "android/app/src/main/res/xml/app_intents_shortcuts.xml",
-    packageName: "com.example.appintents",
+    manifest: "../apps/example-bare/android/app/src/main/AndroidManifest.xml",
+    shortcutsOutput: "../apps/example-bare/android/app/src/main/res/xml/app_shortcuts.xml",
+    packageName: "com.crockalet.appintents.example",
   },
   types: { output: "src/generated/app-intents.d.ts" },
 });
