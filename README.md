@@ -91,7 +91,8 @@ Use the package as an Expo config plugin:
 - iOS Swift App Intents/App Shortcuts generation.
 - Android shortcuts XML, strings XML, and manifest patching.
 - Generated TypeScript event types.
-- Runtime helpers for initial intents, warm intent events, intent URL parsing/building, donations, and dynamic shortcuts.
+- Runtime helpers for initial intents, warm intent events, intent URL parsing/building, donations,
+  donation clearing, and dynamic shortcuts.
 - Expo prebuild plugin for iOS codegen, URL scheme setup, app group entitlements, and quick-action forwarding.
 - Bare React Native iOS and Android native modules.
 

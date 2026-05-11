@@ -141,6 +141,12 @@ function AppContent(): ReactElement {
           />
           <Button
             onPress={() => {
+              void exampleRuntime.clearDonations();
+            }}
+            title="Clear donations"
+          />
+          <Button
+            onPress={() => {
               void exampleRuntime.updateDynamicShortcuts([
                 {
                   intent: openOrder,

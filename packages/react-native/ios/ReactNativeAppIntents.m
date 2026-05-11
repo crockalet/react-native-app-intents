@@ -1,5 +1,6 @@
 #import "ReactNativeAppIntents.h"
 
+#import <Intents/Intents.h>
 #import <UIKit/UIKit.h>
 
 static NSMutableArray<NSString *> *ReactNativeAppIntentsPendingURLs = nil;
@@ -84,6 +85,8 @@ RCT_EXPORT_MODULE(ReactNativeAppIntents)
 RCT_REMAP_METHOD(
   donate,
   donate:(NSString *)intentId
+  title:(NSString *)title
+  url:(NSString *)url
   payload:(NSString *)payload
   resolver:(RCTPromiseResolveBlock)resolve
   rejecter:(RCTPromiseRejectBlock)reject
@@ -92,11 +95,51 @@ RCT_REMAP_METHOD(
   dispatch_async(dispatch_get_main_queue(), ^{
     NSString *activityType = [NSString stringWithFormat:@"com.reactnativeappintents.intent.%@", intentId];
     NSUserActivity *activity = [[NSUserActivity alloc] initWithActivityType:activityType];
-    activity.title = intentId;
-    activity.userInfo = @{ @"payload": payload };
+    activity.title = title;
+    activity.eligibleForSearch = YES;
+    activity.userInfo = @{ @"payload": payload, @"url": url };
+    activity.requiredUserInfoKeys = [NSSet setWithArray:@[ @"payload", @"url" ]];
+
+    if (@available(iOS 12.0, *)) {
+      activity.eligibleForPrediction = YES;
+      activity.persistentIdentifier = url;
+    }
+
     [activity becomeCurrent];
     resolve(nil);
   });
+}
+
+RCT_REMAP_METHOD(
+  clearDonations,
+  clearDonationsWithResolver:(RCTPromiseResolveBlock)resolve
+  rejecter:(RCTPromiseRejectBlock)reject
+)
+{
+  void (^deleteSavedUserActivities)(void) = ^{
+    if (@available(iOS 12.0, *)) {
+      [NSUserActivity deleteAllSavedUserActivitiesWithCompletionHandler:^{
+        resolve(nil);
+      }];
+      return;
+    }
+
+    resolve(nil);
+  };
+
+  if (@available(iOS 10.0, *)) {
+    [INInteraction deleteAllInteractionsWithCompletion:^(NSError *_Nullable error) {
+      if (error != nil) {
+        reject(@"clear_donations_failed", error.localizedDescription, error);
+        return;
+      }
+
+      deleteSavedUserActivities();
+    }];
+    return;
+  }
+
+  deleteSavedUserActivities();
 }
 
 RCT_REMAP_METHOD(

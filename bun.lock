@@ -84,7 +84,7 @@
     },
     "packages/react-native": {
       "name": "@crockalet/react-native-app-intents",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "bin": {
         "app-intents": "./dist/cli/cli.js",
       },

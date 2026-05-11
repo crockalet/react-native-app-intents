@@ -1,6 +1,8 @@
 package com.reactnativeappintents
 
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
@@ -13,6 +15,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import java.lang.ref.WeakReference
+import java.security.MessageDigest
 import java.util.ArrayDeque
 
 class ReactNativeAppIntentsModule(
@@ -25,9 +28,42 @@ class ReactNativeAppIntentsModule(
   override fun getName(): String = NAME
 
   @ReactMethod
-  fun donate(intentId: String, payload: String, promise: Promise) {
-    ShortcutManagerCompat.reportShortcutUsed(reactApplicationContext, intentId)
-    promise.resolve(null)
+  fun donate(intentId: String, title: String, url: String, payload: String, promise: Promise) {
+    try {
+      val shortcutId = createDonationShortcutId(intentId, payload)
+      val shortcut = createShortcut(shortcutId, title, null, url, reactApplicationContext.packageName, true)
+
+      if (!ShortcutManagerCompat.pushDynamicShortcut(reactApplicationContext, shortcut)) {
+        promise.reject(
+          "donate_failed",
+          "Android did not accept the donated shortcut. Shortcut publishing may be rate-limited.",
+        )
+        return
+      }
+
+      saveShortcutId(DONATION_SHORTCUT_IDS_KEY, shortcutId)
+      ShortcutManagerCompat.reportShortcutUsed(reactApplicationContext, shortcutId)
+      promise.resolve(null)
+    } catch (error: Exception) {
+      promise.reject("donate_failed", "Failed to donate intent.", error)
+    }
+  }
+
+  @ReactMethod
+  fun clearDonations(promise: Promise) {
+    try {
+      val shortcutIds = getShortcutIds(DONATION_SHORTCUT_IDS_KEY).toList()
+
+      if (shortcutIds.isNotEmpty()) {
+        ShortcutManagerCompat.removeDynamicShortcuts(reactApplicationContext, shortcutIds)
+        ShortcutManagerCompat.removeLongLivedShortcuts(reactApplicationContext, shortcutIds)
+      }
+
+      clearShortcutIds(DONATION_SHORTCUT_IDS_KEY)
+      promise.resolve(null)
+    } catch (error: Exception) {
+      promise.reject("clear_donations_failed", "Failed to clear donated shortcuts.", error)
+    }
   }
 
   @ReactMethod
@@ -46,8 +82,13 @@ class ReactNativeAppIntentsModule(
       shortcutList.add(createShortcut(shortcut, packageName))
     }
 
-    ShortcutManagerCompat.removeAllDynamicShortcuts(reactApplicationContext)
+    val previousShortcutIds = getShortcutIds(DYNAMIC_SHORTCUT_IDS_KEY).toList()
+    if (previousShortcutIds.isNotEmpty()) {
+      ShortcutManagerCompat.removeDynamicShortcuts(reactApplicationContext, previousShortcutIds)
+    }
+
     ShortcutManagerCompat.addDynamicShortcuts(reactApplicationContext, shortcutList)
+    setShortcutIds(DYNAMIC_SHORTCUT_IDS_KEY, shortcutList.map { it.id }.toSet())
     promise.resolve(null)
   }
 
@@ -60,8 +101,21 @@ class ReactNativeAppIntentsModule(
     val subtitle = shortcut.getString("subtitle")
     val url = shortcut.getString("url") ?: error("Shortcut url is required.")
 
+    return createShortcut(shortcutId, title, subtitle, url, packageName, false)
+  }
+
+  private fun createShortcut(
+    shortcutId: String,
+    title: String,
+    subtitle: String?,
+    url: String,
+    packageName: String,
+    longLived: Boolean,
+  ): ShortcutInfoCompat {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-      setClassName(packageName, "$packageName.MainActivity")
+      reactApplicationContext.packageManager.getLaunchIntentForPackage(packageName)?.component?.let {
+        component = it
+      } ?: setPackage(packageName)
       addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
 
@@ -74,11 +128,37 @@ class ReactNativeAppIntentsModule(
       builder.setLongLabel(subtitle)
     }
 
+    if (longLived) {
+      builder.setLongLived(true)
+    }
+
     return builder.build()
   }
 
+  private fun getShortcutIds(key: String): Set<String> =
+    preferences.getStringSet(key, emptySet())?.toSet() ?: emptySet()
+
+  private fun setShortcutIds(key: String, shortcutIds: Set<String>) {
+    preferences.edit().putStringSet(key, shortcutIds).apply()
+  }
+
+  private fun saveShortcutId(key: String, shortcutId: String) {
+    setShortcutIds(key, getShortcutIds(key) + shortcutId)
+  }
+
+  private fun clearShortcutIds(key: String) {
+    preferences.edit().remove(key).apply()
+  }
+
+  private val preferences: SharedPreferences
+    get() = reactApplicationContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+
   companion object {
     const val NAME = "ReactNativeAppIntents"
+    private const val DONATION_SHORTCUT_PREFIX = "react-native-app-intents-donation"
+    private const val DONATION_SHORTCUT_IDS_KEY = "donationShortcutIds"
+    private const val DYNAMIC_SHORTCUT_IDS_KEY = "dynamicShortcutIds"
+    private const val PREFERENCES_NAME = "ReactNativeAppIntents"
     private val pendingUrls = ArrayDeque<String>()
     private var reactContextRef: WeakReference<ReactApplicationContext>? = null
 
@@ -100,6 +180,15 @@ class ReactNativeAppIntentsModule(
       reactContext
         .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
         .emit("appIntentUrl", payload)
+    }
+
+    private fun createDonationShortcutId(intentId: String, payload: String): String {
+      val digest = MessageDigest
+        .getInstance("SHA-256")
+        .digest("$intentId:$payload".toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+
+      return "$DONATION_SHORTCUT_PREFIX:$digest"
     }
   }
 }

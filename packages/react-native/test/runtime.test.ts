@@ -77,14 +77,18 @@ test("runtime parses initial urls and emits typed handlers", async () => {
     buildIntentUrl("example", openOrder, { orderNumber: "1234" }),
   );
   const donated: string[] = [];
+  const clearedDonations: string[] = [];
   const shortcutUpdates: unknown[] = [];
   const runtime = createAppIntentsRuntime({
     scheme: "example",
     intents: [openOrder] as const,
     linking: linking.adapter,
     nativeModule: {
-      async donate(intentId, payload) {
-        donated.push(`${intentId}:${payload}`);
+      async clearDonations() {
+        clearedDonations.push("clear");
+      },
+      async donate(intentId, title, url, payload) {
+        donated.push(`${intentId}:${title}:${url}:${payload}`);
       },
       async updateDynamicShortcuts(shortcuts) {
         shortcutUpdates.push(shortcuts);
@@ -101,6 +105,7 @@ test("runtime parses initial urls and emits typed handlers", async () => {
   linking.emit(buildIntentUrl("example", openOrder, { orderNumber: "5678" }));
 
   await runtime.donate(openOrder, { orderNumber: "5678" });
+  await runtime.clearDonations();
   await runtime.updateDynamicShortcuts([
     {
       intent: openOrder,
@@ -119,7 +124,11 @@ test("runtime parses initial urls and emits typed handlers", async () => {
     params: { orderNumber: "1234" },
     url: "example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%221234%22%7D",
   });
-  assert.equal(donated[0], 'openOrder:{"orderNumber":"5678"}');
+  assert.equal(
+    donated[0],
+    'openOrder:Open Order:example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%225678%22%7D:{"orderNumber":"5678"}',
+  );
+  assert.deepEqual(clearedDonations, ["clear"]);
   assert.deepEqual(shortcutUpdates[0], [
     {
       id: "openOrder",
@@ -145,6 +154,7 @@ test("runtime preserves the initial intent when linking emits it during startup"
     intents: [openOrder] as const,
     linking: linking.adapter,
     nativeModule: {
+      async clearDonations() {},
       async donate() {},
       async updateDynamicShortcuts() {},
     },
@@ -184,6 +194,7 @@ test("runtime returns a startup event that arrives before any handlers subscribe
     intents: [openOrder] as const,
     linking: linking.adapter,
     nativeModule: {
+      async clearDonations() {},
       async donate() {},
       async updateDynamicShortcuts() {},
     },
@@ -257,6 +268,7 @@ test("runtime serializes and parses entity params", async () => {
     intents: [openSavedOrder] as const,
     linking: linking.adapter,
     nativeModule: {
+      async clearDonations() {},
       async donate() {},
       async updateDynamicShortcuts() {},
     },

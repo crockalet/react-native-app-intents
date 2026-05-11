@@ -6,7 +6,8 @@ export interface NativeShortcutPayload {
 }
 
 export interface AppIntentsNativeModule {
-  donate(intentId: string, payload: string): Promise<void>;
+  clearDonations(): Promise<void>;
+  donate(intentId: string, title: string, url: string, payload: string): Promise<void>;
   getInitialIntentURL?(): Promise<string | null>;
   updateDynamicShortcuts(shortcuts: readonly NativeShortcutPayload[]): Promise<void>;
 }

@@ -173,6 +173,7 @@ function getDefaultLinking(providedNativeModule?: AppIntentsNativeModule): Linki
 function getNativeModule(): AppIntentsNativeModule {
   if (typeof require !== "function") {
     return {
+      async clearDonations(): Promise<void> {},
       async donate(): Promise<void> {},
       async updateDynamicShortcuts(): Promise<void> {},
     };
@@ -187,6 +188,7 @@ function getNativeModule(): AppIntentsNativeModule {
 
   return (
     getReactNativeAppIntentsModule(reactNative) ?? {
+      async clearDonations(): Promise<void> {},
       async donate(): Promise<void> {},
       async updateDynamicShortcuts(): Promise<void> {},
     }
@@ -450,6 +452,7 @@ export function parseIntentUrl<TIntents extends IntentTuple>(
 
 export interface AppIntentsRuntime<TIntents extends IntentTuple> {
   buildUrl<TIntent extends TIntents[number]>(intent: TIntent, params: ParamsOf<TIntent>): string;
+  clearDonations(): Promise<void>;
   dispose(): void;
   donate<TIntent extends TIntents[number]>(
     intent: TIntent,
@@ -573,6 +576,10 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
       return buildIntentUrl(options.scheme, intent, params);
     },
 
+    async clearDonations() {
+      await nativeModule.clearDonations();
+    },
+
     dispose() {
       subscription.remove();
       anyIntentHandlers.clear();
@@ -581,7 +588,14 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
     },
 
     async donate(intent, params) {
-      await nativeModule.donate(intent.id, JSON.stringify(serializeIntentParams(intent, params)));
+      const serializedParams = serializeIntentParams(intent, params);
+
+      await nativeModule.donate(
+        intent.id,
+        resolveLocalizedText(intent.title, intent.id),
+        buildIntentUrl(options.scheme, intent, params),
+        JSON.stringify(serializedParams),
+      );
     },
 
     async getInitialIntent() {

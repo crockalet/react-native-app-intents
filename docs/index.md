@@ -242,10 +242,12 @@ await appIntents.updateDynamicShortcuts([
 
 ```ts
 await appIntents.donate(openOrder, { orderNumber: "1234" });
+await appIntents.clearDonations();
 ```
 
-On iOS this creates an `NSUserActivity`; on Android it reports shortcut usage through
-`ShortcutManagerCompat`.
+On iOS this creates an `NSUserActivity` eligible for system predictions and clears donated
+interactions/user activities. On Android this publishes a removable long-lived shortcut donation and
+clears the shortcut donations created by `donate`.
 
 ## Current features
 
@@ -256,7 +258,7 @@ On iOS this creates an `NSUserActivity`; on Android it reports shortcut usage th
 - Generated TypeScript event types.
 - Initial intent and warm intent event handling in JavaScript.
 - Dynamic home-screen shortcuts on iOS and Android.
-- Intent donation helpers.
+- Intent donation and donation-clearing helpers.
 - Expo prebuild plugin and bare React Native native modules.
 
 ## Planned features
