@@ -21,7 +21,7 @@ const {
 } =
   (ExpoConfigPlugins as typeof ExpoConfigPlugins & { default?: typeof ExpoConfigPlugins })
     .default ?? ExpoConfigPlugins;
-const EXPO_PLUGIN_PACKAGE_NAME = "react-native-app-intents";
+const EXPO_PLUGIN_PACKAGE_NAME = "@crockalet/react-native-app-intents";
 const GENERATED_IOS_SOURCE_FILE_NAME = "GeneratedAppIntents.swift";
 const DEFAULT_ANDROID_MANIFEST_PATH = "android/app/src/main/AndroidManifest.xml";
 const DEFAULT_ANDROID_SHORTCUTS_PATH = "android/app/src/main/res/xml/app_intents_shortcuts.xml";

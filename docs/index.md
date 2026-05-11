@@ -1,17 +1,17 @@
 ---
 layout: default
-title: react-native-app-intents
+title: "@crockalet/react-native-app-intents"
 ---
 
 # react-native-app-intents
 
-`react-native-app-intents` helps React Native apps define type-safe intents once, generate native
+`@crockalet/react-native-app-intents` helps React Native apps define type-safe intents once, generate native
 App Intents/App Shortcuts files, and route launched intents back into JavaScript.
 
 ## Install
 
 ```bash
-npm install react-native-app-intents
+npm install @crockalet/react-native-app-intents
 ```
 
 For iOS bare React Native apps, install pods after adding the package:
@@ -25,7 +25,7 @@ npx pod-install
 Create intent files anywhere matched by your config, for example `src/orders.intents.ts`:
 
 ```ts
-import { defineEntity, defineIntent, p } from "react-native-app-intents";
+import { defineEntity, defineIntent, p } from "@crockalet/react-native-app-intents";
 
 export const Order = defineEntity({
   id: "Order",
@@ -91,7 +91,7 @@ export const openSavedOrder = defineIntent({
 Create `app-intents.config.ts` at your app root:
 
 ```ts
-import { defineAppIntentsConfig } from "react-native-app-intents/codegen";
+import { defineAppIntentsConfig } from "@crockalet/react-native-app-intents/codegen";
 
 export default defineAppIntentsConfig({
   intents: ["src/**/*.intents.ts"],
@@ -133,7 +133,7 @@ Add the package as an Expo config plugin:
   "expo": {
     "plugins": [
       [
-        "react-native-app-intents",
+        "@crockalet/react-native-app-intents",
         {
           "intents": ["src/**/*.intents.ts"],
           "scheme": "myapp",
@@ -206,7 +206,7 @@ pending URL queue.
 ## Handle intents at runtime
 
 ```ts
-import { createAppIntentsRuntime } from "react-native-app-intents";
+import { createAppIntentsRuntime } from "@crockalet/react-native-app-intents";
 import { openOrder, openSavedOrder } from "./orders.intents";
 
 const appIntents = createAppIntentsRuntime({
@@ -249,7 +249,7 @@ On iOS this creates an `NSUserActivity`; on Android it reports shortcut usage th
 
 ## Current features
 
-- Single npm package containing the runtime, authoring API, codegen, CLI, and Expo plugin.
+- Single scoped npm package containing the runtime, authoring API, codegen, CLI, and Expo plugin.
 - Type-safe authoring with `defineIntent`, `defineEntity`, and `p.*` parameter builders.
 - Swift App Intents/App Shortcuts generation for iOS.
 - Android shortcuts XML, strings XML, and manifest patching.

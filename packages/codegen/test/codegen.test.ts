@@ -29,7 +29,7 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
     await writeFile(
       join(cwd, "src/orders.intents.ts"),
       [
-        'import { defineEntity, defineIntent, p } from "react-native-app-intents";',
+        'import { defineEntity, defineIntent, p } from "@crockalet/react-native-app-intents";',
         "",
         "const Order = defineEntity({",
         '  id: "Order",',

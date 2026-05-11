@@ -3,7 +3,7 @@
 Type-safe App Intents, App Shortcuts, and dynamic shortcut helpers for React Native.
 
 ```bash
-npm install react-native-app-intents
+npm install @crockalet/react-native-app-intents
 ```
 
 Full usage docs are set up for GitHub Pages at:
@@ -14,7 +14,7 @@ Full usage docs are set up for GitHub Pages at:
 Create `app-intents.config.ts`:
 
 ```ts
-import { defineAppIntentsConfig } from "react-native-app-intents/codegen";
+import { defineAppIntentsConfig } from "@crockalet/react-native-app-intents/codegen";
 
 export default defineAppIntentsConfig({
   intents: ["src/**/*.intents.ts"],
@@ -36,7 +36,7 @@ export default defineAppIntentsConfig({
 Define intents:
 
 ```ts
-import { defineIntent, p } from "react-native-app-intents";
+import { defineIntent, p } from "@crockalet/react-native-app-intents";
 
 export const openOrder = defineIntent({
   id: "openOrder",
@@ -59,7 +59,7 @@ npx app-intents generate
 Handle intents in JS:
 
 ```ts
-import { createAppIntentsRuntime } from "react-native-app-intents";
+import { createAppIntentsRuntime } from "@crockalet/react-native-app-intents";
 import { openOrder } from "./orders.intents";
 
 const appIntents = createAppIntentsRuntime({
@@ -79,14 +79,14 @@ Use the package as an Expo config plugin:
 ```json
 {
   "expo": {
-    "plugins": ["react-native-app-intents"]
+    "plugins": ["@crockalet/react-native-app-intents"]
   }
 }
 ```
 
 ## Current features
 
-- Single npm package: runtime, authoring API, codegen, CLI, and Expo plugin.
+- Single scoped npm package: runtime, authoring API, codegen, CLI, and Expo plugin.
 - Type-safe `defineIntent`, `defineEntity`, and `p.*` parameter builders.
 - iOS Swift App Intents/App Shortcuts generation.
 - Android shortcuts XML, strings XML, and manifest patching.
@@ -114,4 +114,4 @@ bun run build
 ```
 
 The repository is a Bun workspace. `packages/react-native` is the public
-`react-native-app-intents` package; the other workspace packages are private internal boundaries.
+`@crockalet/react-native-app-intents` package; the other workspace packages are private internal boundaries.

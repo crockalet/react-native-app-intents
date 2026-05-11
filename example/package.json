@@ -24,6 +24,6 @@
     "test": "bun test"
   },
   "dependencies": {
-    "react-native-app-intents": "workspace:*"
+    "@crockalet/react-native-app-intents": "workspace:*"
   }
 }

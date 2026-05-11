@@ -1,4 +1,4 @@
-import { defineAppIntentsConfig } from "react-native-app-intents/codegen";
+import { defineAppIntentsConfig } from "@crockalet/react-native-app-intents/codegen";
 
 export default defineAppIntentsConfig({
   intents: ["src/**/*.intents.ts"],
