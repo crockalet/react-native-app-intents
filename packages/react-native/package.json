@@ -3,8 +3,13 @@
   "version": "0.1.1",
   "description": "React Native runtime, authoring API, codegen, CLI, and Expo plugin for App Intents.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/crockalet/react-native-app-intents.git",
+    "directory": "packages/react-native"
+  },
   "bin": {
-    "app-intents": "./dist/cli/cli.js"
+    "app-intents": "dist/cli/cli.js"
   },
   "files": [
     "dist/**/*.d.ts",
