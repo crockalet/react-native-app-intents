@@ -1,6 +1,7 @@
 {
   "name": "@react-native-app-intents/core",
   "version": "0.0.0",
+  "private": true,
   "description": "Core authoring primitives for react-native-app-intents.",
   "license": "MIT",
   "files": [

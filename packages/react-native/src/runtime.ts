@@ -1,8 +1,4 @@
-import type {
-  AnyParameterDefinition,
-  IntentDefinition,
-  ParamsOf,
-} from "@react-native-app-intents/core";
+import type { AnyParameterDefinition, IntentDefinition, ParamsOf } from "./core/index.js";
 import type { AppIntentsNativeModule, NativeShortcutPayload } from "./native.js";
 
 type MaybePromise = void | Promise<void>;

@@ -11,7 +11,7 @@ import {
   type NormalizedEntityMetadata,
   type NormalizedIntentMetadata,
   type ObjectParameterDefinition,
-} from "@react-native-app-intents/core";
+} from "../core/index.js";
 
 import type { AppIntentsConfig } from "./config.js";
 

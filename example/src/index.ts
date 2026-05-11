@@ -2,7 +2,7 @@ import {
   createAppIntentsRuntime,
   type AppIntentsNativeModule,
   type LinkingAdapter,
-} from "@react-native-app-intents/react-native";
+} from "react-native-app-intents";
 
 import { openOrder, openSavedOrder } from "./orders.intents.js";
 

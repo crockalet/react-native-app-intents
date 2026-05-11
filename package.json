@@ -1,5 +1,5 @@
 {
-  "name": "react-native-app-intents",
+  "name": "react-native-app-intents-monorepo",
   "private": true,
   "workspaces": [
     "packages/*",

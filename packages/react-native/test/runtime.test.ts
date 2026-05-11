@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { defineEntity, defineIntent, p } from "@react-native-app-intents/core";
+import { defineEntity, defineIntent, p } from "../src/core/index.js";
 
 import { buildIntentUrl, createAppIntentsRuntime, parseIntentUrl } from "../src/index.js";
 

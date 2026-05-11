@@ -1,20 +1,109 @@
 # react-native-app-intents
 
-Initial M0 scaffold for a Bun workspaces monorepo that will house the core authoring API, codegen, CLI, React Native runtime, Expo plugin, and an example app package.
+Type-safe App Intents, App Shortcuts, and dynamic shortcut helpers for React Native.
 
-## Workspace layout
-
-```text
-packages/
-  core/
-  codegen/
-  cli/
-  react-native/
-  expo-plugin/
-example/
+```bash
+npm install react-native-app-intents
 ```
 
-## Commands
+Full usage docs are set up for GitHub Pages at:
+`https://crockalet.github.io/react-native-app-intents/`
+
+## Basic setup
+
+Create `app-intents.config.ts`:
+
+```ts
+import { defineAppIntentsConfig } from "react-native-app-intents/codegen";
+
+export default defineAppIntentsConfig({
+  intents: ["src/**/*.intents.ts"],
+  scheme: "myapp",
+  ios: {
+    output: "ios/MyApp/AppShortcuts.swift",
+    bundleIdentifier: "com.example.myapp",
+    siriUsageDescription: "Used to let Siri run app actions.",
+  },
+  android: {
+    manifest: "android/app/src/main/AndroidManifest.xml",
+    shortcutsOutput: "android/app/src/main/res/xml/app_shortcuts.xml",
+    packageName: "com.example.myapp",
+  },
+  types: { output: "src/generated/app-intents.d.ts" },
+});
+```
+
+Define intents:
+
+```ts
+import { defineIntent, p } from "react-native-app-intents";
+
+export const openOrder = defineIntent({
+  id: "openOrder",
+  title: "Open Order",
+  phrases: ["Open order ${orderNumber} in ${.applicationName}"],
+  params: {
+    orderNumber: p.string({ title: "Order number", default: "1234" }),
+  },
+  surfaces: { siri: true, spotlight: true, appShortcut: true, assistant: true },
+  androidBii: "actions.intent.GET_ORDER",
+});
+```
+
+Generate native files:
+
+```bash
+npx app-intents generate
+```
+
+Handle intents in JS:
+
+```ts
+import { createAppIntentsRuntime } from "react-native-app-intents";
+import { openOrder } from "./orders.intents";
+
+const appIntents = createAppIntentsRuntime({
+  scheme: "myapp",
+  intents: [openOrder] as const,
+});
+
+appIntents.onIntent(openOrder, (params) => {
+  // Navigate to the requested order.
+});
+```
+
+## Expo setup
+
+Use the package as an Expo config plugin:
+
+```json
+{
+  "expo": {
+    "plugins": ["react-native-app-intents"]
+  }
+}
+```
+
+## Current features
+
+- Single npm package: runtime, authoring API, codegen, CLI, and Expo plugin.
+- Type-safe `defineIntent`, `defineEntity`, and `p.*` parameter builders.
+- iOS Swift App Intents/App Shortcuts generation.
+- Android shortcuts XML, strings XML, and manifest patching.
+- Generated TypeScript event types.
+- Runtime helpers for initial intents, warm intent events, intent URL parsing/building, donations, and dynamic shortcuts.
+- Expo prebuild plugin for iOS codegen, URL scheme setup, app group entitlements, and quick-action forwarding.
+- Bare React Native iOS and Android native modules.
+
+## Planned features
+
+- Better Android Assistant/App Actions coverage.
+- Richer icons and metadata for generated shortcuts.
+- More Expo and bare-app setup automation.
+- Expanded examples and end-to-end app templates.
+- More generated type helpers for navigation integrations.
+
+## Development
 
 ```bash
 bun install
@@ -24,74 +113,5 @@ bun run test
 bun run build
 ```
 
-The current code establishes the package boundaries and shared tooling so the implementation milestones in `plan.md` can land incrementally.
-
-## iOS home-screen quick actions
-
-On iOS, the items shown when a user **long-presses your app icon on the home screen** are
-`UIApplicationShortcutItem` quick actions.
-
-If you create those items through `exampleRuntime.updateDynamicShortcuts(...)` (or the equivalent
-runtime API in your app), iOS will not route them through the AppIntent handoff automatically. Your
-app delegate must forward the selected shortcut's URL into `ReactNativeAppIntents` for both:
-
-- **cold launch** via `launchOptions[.shortcutItem]`
-- **warm/background launch** via `application(_:performActionFor:completionHandler:)`
-
-Bare React Native apps should wire it like this:
-
-```swift
-func application(
-  _ application: UIApplication,
-  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
-) -> Bool {
-  // ... existing startup ...
-
-  if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem,
-     handleShortcutItem(shortcutItem) {
-    return false
-  }
-
-  return true
-}
-
-func application(
-  _ application: UIApplication,
-  performActionFor shortcutItem: UIApplicationShortcutItem,
-  completionHandler: @escaping (Bool) -> Void
-) {
-  completionHandler(handleShortcutItem(shortcutItem))
-}
-
-private func handleShortcutItem(_ shortcutItem: UIApplicationShortcutItem) -> Bool {
-  guard let url = shortcutItem.userInfo?["url"] as? String else {
-    return false
-  }
-
-  ReactNativeAppIntents.recordIncomingURLString(url)
-  return true
-}
-```
-
-Without that forwarding, a cold launch from the home-screen quick-action menu can open the app
-without populating the initial intent in JS.
-
-## iOS AppIntent-generated shortcuts
-
-The Swift code generated for iOS AppIntents uses a pending-URL handoff for true AppIntent surfaces
-such as Siri and App Shortcuts. When your app uses an App Group, prefer setting
-`ios.appGroupIdentifier` in `app-intents.config.ts` so the generated Swift can write to an explicit
-shared `UserDefaults` suite instead of relying on `Bundle.main` lookup during AppIntent execution.
-
-## Expo note
-
-The Expo plugin now does the native iOS wiring during prebuild:
-
-- runs codegen with Expo-derived native paths
-- patches `Info.plist` for the URL scheme and optional Siri/app-group settings
-- patches entitlements when `ios.appGroupIdentifier` is configured
-- injects `UIApplicationShortcutItem` forwarding into `AppDelegate.swift`
-- adds the generated Swift source file to the Xcode project
-
-That means Expo apps using `updateDynamicShortcuts(...)` no longer need to hand-edit
-`AppDelegate.swift` after prebuild for this quick-action path.
+The repository is a Bun workspace. `packages/react-native` is the public
+`react-native-app-intents` package; the other workspace packages are private internal boundaries.

@@ -1,13 +1,17 @@
 {
-  "name": "@react-native-app-intents/react-native",
+  "name": "react-native-app-intents",
   "version": "0.0.0",
-  "description": "Runtime helpers and future TurboModule surface for react-native-app-intents.",
+  "description": "React Native runtime, authoring API, codegen, CLI, and Expo plugin for App Intents.",
   "license": "MIT",
+  "bin": {
+    "app-intents": "./dist/cli/cli.js"
+  },
   "files": [
     "dist",
     "ios",
     "android",
-    "ReactNativeAppIntents.podspec"
+    "ReactNativeAppIntents.podspec",
+    "app.plugin.js"
   ],
   "type": "module",
   "sideEffects": false,
@@ -16,16 +20,39 @@
   "react-native": "./dist/index.js",
   "exports": {
     ".": {
+      "react-native": "./dist/index.js",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./codegen": {
+      "types": "./dist/codegen/index.d.ts",
+      "default": "./dist/codegen/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "default": "./dist/cli/index.js"
+    },
+    "./expo-plugin": {
+      "types": "./dist/expo-plugin/index.d.ts",
+      "default": "./dist/expo-plugin/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "bun test"
   },
   "dependencies": {
-    "@react-native-app-intents/core": "workspace:*"
+    "@expo/config-plugins": "^55.0.8"
   },
   "peerDependencies": {
     "react": "*",

@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import { defineAppIntentsConfig, generateAppIntents } from "@react-native-app-intents/codegen";
+import { defineAppIntentsConfig, generateAppIntents } from "react-native-app-intents/codegen";
 
 import {
   applyEntitlementsAppIntentsConfig,
@@ -19,7 +19,7 @@ test("withAppIntents appends a plugin tuple", () => {
   );
 
   assert.deepEqual(config.plugins, [
-    ["@react-native-app-intents/expo-plugin", { intents: ["src/**/*.intents.ts"], scheme: "example" }],
+    ["react-native-app-intents", { intents: ["src/**/*.intents.ts"], scheme: "example" }],
   ]);
 });
 
@@ -53,6 +53,7 @@ test("Expo config helpers patch Info.plist and entitlements", () => {
     intents: ["src/**/*.intents.ts"],
     scheme: "expoexample",
     ios: {
+      output: "ios/AppIntents/GeneratedAppIntents.swift",
       appGroupIdentifier: "group.dev.expo.example",
       siriUsageDescription: "Used to let Siri run app actions.",
     },
@@ -66,14 +67,8 @@ test("Expo config helpers patch Info.plist and entitlements", () => {
       CFBundleURLSchemes: ["expoexample"],
     },
   ]);
-  assert.equal(
-    infoPlist.ReactNativeAppIntentsAppGroupIdentifier,
-    "group.dev.expo.example",
-  );
-  assert.equal(
-    infoPlist.NSSiriUsageDescription,
-    "Used to let Siri run app actions.",
-  );
+  assert.equal(infoPlist.ReactNativeAppIntentsAppGroupIdentifier, "group.dev.expo.example");
+  assert.equal(infoPlist.NSSiriUsageDescription, "Used to let Siri run app actions.");
   assert.deepEqual(entitlements["com.apple.security.application-groups"], [
     "group.dev.expo.example",
   ]);
@@ -89,7 +84,7 @@ test("expo plugin config drives codegen on expo-style paths", async () => {
     await writeFile(
       join(cwd, "src/orders.intents.ts"),
       [
-        'import { defineIntent, p } from "@react-native-app-intents/core";',
+        'import { defineIntent, p } from "react-native-app-intents";',
         "",
         "export const openOrder = defineIntent({",
         '  id: "openOrder",',

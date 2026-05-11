@@ -16,10 +16,10 @@
       "version": "0.0.1",
       "dependencies": {
         "@react-native-app-intents/example": "workspace:*",
-        "@react-native-app-intents/react-native": "workspace:*",
         "@react-native/new-app-screen": "0.85.3",
         "react": "19.2.3",
         "react-native": "0.85.3",
+        "react-native-app-intents": "workspace:*",
         "react-native-safe-area-context": "^5.5.2",
       },
       "devDependencies": {
@@ -50,10 +50,7 @@
       "name": "@react-native-app-intents/example",
       "version": "0.0.0",
       "dependencies": {
-        "@react-native-app-intents/codegen": "workspace:*",
-        "@react-native-app-intents/core": "workspace:*",
-        "@react-native-app-intents/expo-plugin": "workspace:*",
-        "@react-native-app-intents/react-native": "workspace:*",
+        "react-native-app-intents": "workspace:*",
       },
     },
     "packages/cli": {
@@ -86,10 +83,13 @@
       },
     },
     "packages/react-native": {
-      "name": "@react-native-app-intents/react-native",
+      "name": "react-native-app-intents",
       "version": "0.0.0",
+      "bin": {
+        "app-intents": "./dist/cli/cli.js",
+      },
       "dependencies": {
-        "@react-native-app-intents/core": "workspace:*",
+        "@expo/config-plugins": "^55.0.8",
       },
       "peerDependencies": {
         "react": "*",
@@ -509,8 +509,6 @@
     "@react-native-app-intents/example-bare": ["@react-native-app-intents/example-bare@workspace:apps/example-bare"],
 
     "@react-native-app-intents/expo-plugin": ["@react-native-app-intents/expo-plugin@workspace:packages/expo-plugin"],
-
-    "@react-native-app-intents/react-native": ["@react-native-app-intents/react-native@workspace:packages/react-native"],
 
     "@react-native-community/cli": ["@react-native-community/cli@20.1.0", "", { "dependencies": { "@react-native-community/cli-clean": "20.1.0", "@react-native-community/cli-config": "20.1.0", "@react-native-community/cli-doctor": "20.1.0", "@react-native-community/cli-server-api": "20.1.0", "@react-native-community/cli-tools": "20.1.0", "@react-native-community/cli-types": "20.1.0", "commander": "^9.4.1", "deepmerge": "^4.3.0", "execa": "^5.0.0", "find-up": "^5.0.0", "fs-extra": "^8.1.0", "graceful-fs": "^4.1.3", "picocolors": "^1.1.1", "prompts": "^2.4.2", "semver": "^7.5.2" }, "bin": { "rnc-cli": "build/bin.js" } }, "sha512-441WsVtRe4nGJ9OzA+QMU1+22lA6Q2hRWqqIMKD0wjEMLqcSfOZyu2UL9a/yRpL/dRpyUsU4n7AxqKfTKO/Csg=="],
 
@@ -1443,6 +1441,8 @@
     "react-is": ["react-is@19.2.6", "", {}, "sha512-XjBR15BhXuylgWGuslhDKqlSayuqvqBX91BP8pauG8kd1zY8kotkNWbXksTCNRarse4kuGbe2kIY05ARtwNIvw=="],
 
     "react-native": ["react-native@0.85.3", "", { "dependencies": { "@react-native/assets-registry": "0.85.3", "@react-native/codegen": "0.85.3", "@react-native/community-cli-plugin": "0.85.3", "@react-native/gradle-plugin": "0.85.3", "@react-native/js-polyfills": "0.85.3", "@react-native/normalize-colors": "0.85.3", "@react-native/virtualized-lists": "0.85.3", "abort-controller": "^3.0.0", "anser": "^1.4.9", "ansi-regex": "^5.0.0", "babel-plugin-syntax-hermes-parser": "0.33.3", "base64-js": "^1.5.1", "commander": "^12.0.0", "flow-enums-runtime": "^0.0.6", "hermes-compiler": "250829098.0.10", "invariant": "^2.2.4", "memoize-one": "^5.0.0", "metro-runtime": "^0.84.3", "metro-source-map": "^0.84.3", "nullthrows": "^1.1.1", "pretty-format": "^29.7.0", "promise": "^8.3.0", "react-devtools-core": "^6.1.5", "react-refresh": "^0.14.0", "regenerator-runtime": "^0.13.2", "scheduler": "0.27.0", "semver": "^7.1.3", "stacktrace-parser": "^0.1.10", "tinyglobby": "^0.2.15", "whatwg-fetch": "^3.0.0", "ws": "^7.5.10", "yargs": "^17.6.2" }, "peerDependencies": { "@react-native/jest-preset": "0.85.3", "@types/react": "^19.1.1", "react": "^19.2.3" }, "optionalPeers": ["@react-native/jest-preset", "@types/react"], "bin": { "react-native": "cli.js" } }, "sha512-HN/fGC+3nZVcDNcw7gfbM/DuqZAvI9Mz+/SxuhODaua4JY0BPzhfTzWXRyTR4mRgMHmShTPpH2PYMTxvZrsdZA=="],
+
+    "react-native-app-intents": ["react-native-app-intents@workspace:packages/react-native"],
 
     "react-native-safe-area-context": ["react-native-safe-area-context@5.7.0", "", { "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-/9/MtQz8ODphjsLdZ+GZAIcC/RtoqW9EeShf7Uvnfgm/pzYrJ75y3PV/J1wuAV1T5Dye5ygq4EAW20RoBq0ABQ=="],
 

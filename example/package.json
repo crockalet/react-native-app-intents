@@ -24,9 +24,6 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@react-native-app-intents/codegen": "workspace:*",
-    "@react-native-app-intents/core": "workspace:*",
-    "@react-native-app-intents/expo-plugin": "workspace:*",
-    "@react-native-app-intents/react-native": "workspace:*"
+    "react-native-app-intents": "workspace:*"
   }
 }

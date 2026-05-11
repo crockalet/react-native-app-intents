@@ -7,6 +7,5 @@
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"],
-  "references": [{ "path": "../core/tsconfig.build.json" }]
+  "include": ["src/**/*.ts"]
 }

@@ -9,7 +9,7 @@ import {
   generateAppIntents,
   type AppIntentsConfig,
   type AppIntentsConfigInput,
-} from "@react-native-app-intents/codegen";
+} from "../codegen/index.js";
 
 const {
   IOSConfig,
