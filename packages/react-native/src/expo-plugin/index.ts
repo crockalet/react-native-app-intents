@@ -1,6 +1,8 @@
 import { access, readFile, readdir, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
+import type { ConfigContext } from "@expo/config";
+import { evalConfig } from "@expo/config/build/evalConfig.js";
 import * as ExpoConfigPlugins from "@expo/config-plugins";
 import type { ConfigPlugin } from "@expo/config-plugins";
 import type { InfoPlist } from "@expo/config-plugins/build/ios/IosConfig.types";
@@ -22,29 +24,194 @@ const {
   (ExpoConfigPlugins as typeof ExpoConfigPlugins & { default?: typeof ExpoConfigPlugins })
     .default ?? ExpoConfigPlugins;
 const EXPO_PLUGIN_PACKAGE_NAME = "@crockalet/react-native-app-intents";
+const DEFAULT_CONFIG_FILE_NAMES = [
+  "app-intents.config.ts",
+  "app-intents.config.mts",
+  "app-intents.config.cts",
+  "app-intents.config.mjs",
+  "app-intents.config.cjs",
+  "app-intents.config.js",
+] as const;
 const GENERATED_IOS_SOURCE_FILE_NAME = "GeneratedAppIntents.swift";
 const DEFAULT_ANDROID_MANIFEST_PATH = "android/app/src/main/AndroidManifest.xml";
 const DEFAULT_ANDROID_SHORTCUTS_PATH = "android/app/src/main/res/xml/app_intents_shortcuts.xml";
 
-export type ExpoAppIntentsPluginOptions = AppIntentsConfigInput;
+export type ExpoAppIntentsPluginOptions =
+  | (Partial<AppIntentsConfigInput> & { configPath?: string })
+  | undefined;
 type NativeExpoConfig = Parameters<ConfigPlugin<unknown>>[0];
 type JSONPrimitive = string | number | boolean | null;
 type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue | undefined };
 type JSONObject = { [key: string]: JSONValue | undefined };
 type ExpoAppConfig = NativeExpoConfig & { plugins?: unknown[] };
 type ExpoPluginUserConfig = { plugins?: unknown[]; [key: string]: unknown };
+type ResolveExpoPluginOptions = (projectRoot: string) => Promise<AppIntentsConfig>;
 
 export type AppIntentsPluginEntry = readonly [typeof EXPO_PLUGIN_PACKAGE_NAME, AppIntentsConfig];
 
 export function withAppIntents<TConfig extends ExpoPluginUserConfig>(
   config: TConfig,
-  options: ExpoAppIntentsPluginOptions,
+  options: Exclude<ExpoAppIntentsPluginOptions, undefined> = {},
 ): TConfig & { plugins: unknown[] } {
   const plugins = Array.isArray(config.plugins) ? [...config.plugins] : [];
 
-  plugins.push([EXPO_PLUGIN_PACKAGE_NAME, defineAppIntentsConfig(options)]);
+  plugins.push([EXPO_PLUGIN_PACKAGE_NAME, normalizePluginEntryOptions(options)]);
 
   return { ...config, plugins };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isConfigInput(value: unknown): value is AppIntentsConfigInput {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (!("scheme" in value) || typeof value.scheme !== "string") {
+    return false;
+  }
+
+  if (!("intents" in value)) {
+    return false;
+  }
+
+  return typeof value.intents === "string" || Array.isArray(value.intents);
+}
+
+function getConfigPath(options: ExpoAppIntentsPluginOptions): string | undefined {
+  if (!isRecord(options) || !("configPath" in options) || options.configPath === undefined) {
+    return undefined;
+  }
+
+  if (typeof options.configPath !== "string" || options.configPath.length === 0) {
+    throw new Error("react-native-app-intents Expo plugin option configPath must be a string.");
+  }
+
+  return options.configPath;
+}
+
+function getInlineConfig(options: ExpoAppIntentsPluginOptions): Partial<AppIntentsConfigInput> {
+  if (!isRecord(options)) {
+    return {};
+  }
+
+  const { configPath: _configPath, ...inlineConfig } = options;
+  return inlineConfig as Partial<AppIntentsConfigInput>;
+}
+
+function normalizePluginEntryOptions(
+  options: Exclude<ExpoAppIntentsPluginOptions, undefined>,
+): Exclude<ExpoAppIntentsPluginOptions, undefined> {
+  const configPath = getConfigPath(options);
+  const inlineConfig = getInlineConfig(options);
+
+  if (isConfigInput(inlineConfig)) {
+    return {
+      ...defineAppIntentsConfig(inlineConfig),
+      ...(configPath ? { configPath } : {}),
+    };
+  }
+
+  return options;
+}
+
+function mergeConfigObjects(
+  fileConfig: AppIntentsConfigInput,
+  inlineConfig: Partial<AppIntentsConfigInput>,
+): unknown {
+  const merged: Record<string, unknown> = { ...fileConfig, ...inlineConfig };
+
+  if (fileConfig.ios || inlineConfig.ios) {
+    merged.ios = { ...fileConfig.ios, ...inlineConfig.ios };
+  }
+
+  if (fileConfig.android || inlineConfig.android) {
+    merged.android = { ...fileConfig.android, ...inlineConfig.android };
+  }
+
+  if (fileConfig.types || inlineConfig.types) {
+    merged.types = { ...fileConfig.types, ...inlineConfig.types };
+  }
+
+  return merged;
+}
+
+async function resolveConfigFilePath(projectRoot: string, configPath?: string): Promise<string> {
+  const candidates = configPath ? [configPath] : DEFAULT_CONFIG_FILE_NAMES;
+
+  for (const candidate of candidates) {
+    const absolutePath = isAbsolute(candidate) ? candidate : resolve(projectRoot, candidate);
+
+    try {
+      await access(absolutePath);
+      return absolutePath;
+    } catch {
+      // Try the next supported config filename.
+    }
+  }
+
+  if (configPath) {
+    throw new Error(`Could not find react-native-app-intents config at ${configPath}.`);
+  }
+
+  throw new Error(
+    `Could not find react-native-app-intents config. Create ${DEFAULT_CONFIG_FILE_NAMES[0]} or pass { configPath } to the Expo plugin.`,
+  );
+}
+
+function loadConfigInput(projectRoot: string, configFilePath: string): AppIntentsConfigInput {
+  const context: ConfigContext = {
+    projectRoot,
+    staticConfigPath: null,
+    packageJsonPath: null,
+    config: {},
+  };
+  const { config } = evalConfig(configFilePath, context);
+
+  if (!isConfigInput(config)) {
+    throw new Error(`Invalid react-native-app-intents config at ${configFilePath}.`);
+  }
+
+  return config;
+}
+
+export async function resolveExpoAppIntentsPluginOptions(
+  rawOptions: ExpoAppIntentsPluginOptions,
+  projectRoot: string,
+): Promise<AppIntentsConfig> {
+  const configPath = getConfigPath(rawOptions);
+  const inlineConfig = getInlineConfig(rawOptions);
+
+  if (!configPath && isConfigInput(inlineConfig)) {
+    return defineAppIntentsConfig(inlineConfig);
+  }
+
+  const configFilePath = await resolveConfigFilePath(projectRoot, configPath);
+  const loadedConfig = loadConfigInput(projectRoot, configFilePath);
+  const mergedConfig = mergeConfigObjects(loadedConfig, inlineConfig);
+
+  if (!isConfigInput(mergedConfig)) {
+    throw new Error(`Invalid react-native-app-intents config at ${configFilePath}.`);
+  }
+
+  return defineAppIntentsConfig(mergedConfig);
+}
+
+function createOptionsResolver(rawOptions: ExpoAppIntentsPluginOptions): ResolveExpoPluginOptions {
+  const cache = new Map<string, Promise<AppIntentsConfig>>();
+
+  return (projectRoot) => {
+    let promise = cache.get(projectRoot);
+
+    if (!promise) {
+      promise = resolveExpoAppIntentsPluginOptions(rawOptions, projectRoot);
+      cache.set(projectRoot, promise);
+    }
+
+    return promise;
+  };
 }
 
 export function applyInfoPlistAppIntentsConfig(
@@ -96,6 +263,43 @@ export function applyEntitlementsAppIntentsConfig(
   return entitlements;
 }
 
+function toNativePath(path: string): string {
+  const normalized = path.replaceAll("\\", "/").replace(/^\.\//, "");
+
+  if (isAbsolute(normalized)) {
+    throw new Error(`react-native-app-intents paths must be relative to the project root: ${path}`);
+  }
+
+  return normalized;
+}
+
+function joinNativePath(...segments: string[]): string {
+  return toNativePath(join(...segments));
+}
+
+function resolveExpoIOSOutput(options: AppIntentsConfig, iosProjectName: string): string {
+  const output = toNativePath(options.ios?.output ?? GENERATED_IOS_SOURCE_FILE_NAME);
+
+  if (output.startsWith("ios/")) {
+    return output;
+  }
+
+  return joinNativePath("ios", iosProjectName, output);
+}
+
+function toIOSProjectRelativePath(iosOutput: string): string {
+  const output = toNativePath(iosOutput);
+  return output.startsWith("ios/") ? output.slice("ios/".length) : output;
+}
+
+function resolveExpoAndroidManifest(options: AppIntentsConfig): string {
+  return toNativePath(options.android?.manifest ?? DEFAULT_ANDROID_MANIFEST_PATH);
+}
+
+function resolveExpoAndroidShortcutsOutput(options: AppIntentsConfig): string {
+  return toNativePath(options.android?.shortcutsOutput ?? DEFAULT_ANDROID_SHORTCUTS_PATH);
+}
+
 export function patchSwiftAppDelegate(source: string): string {
   let patched = source;
 
@@ -130,11 +334,7 @@ export function resolveExpoCodegenConfig(
     ...(platform === "ios" && iosProjectName
       ? {
           ios: {
-            output: join(
-              "ios",
-              iosProjectName,
-              basename(options.ios?.output ?? GENERATED_IOS_SOURCE_FILE_NAME),
-            ).replaceAll("\\", "/"),
+            output: resolveExpoIOSOutput(options, iosProjectName),
             ...(options.ios?.appGroupIdentifier
               ? { appGroupIdentifier: options.ios.appGroupIdentifier }
               : {}),
@@ -151,12 +351,12 @@ export function resolveExpoCodegenConfig(
     ...(platform === "android" && androidPackageName
       ? {
           android: {
-            manifest: DEFAULT_ANDROID_MANIFEST_PATH,
+            manifest: resolveExpoAndroidManifest(options),
             packageName: androidPackageName,
-            shortcutsOutput: join(
-              "android/app/src/main/res/xml",
-              basename(options.android?.shortcutsOutput ?? DEFAULT_ANDROID_SHORTCUTS_PATH),
-            ).replaceAll("\\", "/"),
+            shortcutsOutput: resolveExpoAndroidShortcutsOutput(options),
+            ...(options.android?.shortcutsStringsOutput
+              ? { shortcutsStringsOutput: toNativePath(options.android.shortcutsStringsOutput) }
+              : {}),
           },
         }
       : {}),
@@ -209,8 +409,11 @@ async function runPlatformCodegen(
   });
 }
 
-function withGeneratedIOSSource(config: ExpoAppConfig, options: AppIntentsConfig): ExpoAppConfig {
-  return withXcodeProject(config, (currentConfig) => {
+function withGeneratedIOSSource(
+  config: ExpoAppConfig,
+  resolveOptions: ResolveExpoPluginOptions,
+): ExpoAppConfig {
+  return withXcodeProject(config, async (currentConfig) => {
     const project = currentConfig.modResults as any;
     const modRequest = currentConfig.modRequest as { projectName?: string; projectRoot: string };
     const projectName =
@@ -218,32 +421,21 @@ function withGeneratedIOSSource(config: ExpoAppConfig, options: AppIntentsConfig
       ((
         IOSConfig.XcodeUtils as unknown as { getProjectName(projectRoot: string): string }
       ).getProjectName(modRequest.projectRoot) as string);
-    const filePath = `${projectName}/${basename(options.ios?.output ?? GENERATED_IOS_SOURCE_FILE_NAME)}`;
-    const fileReferenceSection = project.pbxFileReferenceSection();
-    const alreadyAdded = Object.values(fileReferenceSection).some(
-      (value) =>
-        typeof value === "object" &&
-        value !== null &&
-        "path" in value &&
-        typeof (value as { path?: unknown }).path === "string" &&
-        (value as { path: string }).path.replaceAll('"', "") === basename(filePath),
-    );
-
-    if (!alreadyAdded) {
+    const options = await resolveOptions(modRequest.projectRoot);
+    const filePath = toIOSProjectRelativePath(resolveExpoIOSOutput(options, projectName));
+    if (typeof project.hasFile !== "function" || !project.hasFile(filePath)) {
       const xcodeUtils = IOSConfig.XcodeUtils as unknown as {
-        findFirstTarget(xcodeProject: any): { uuid: string };
-        pbxAddSourceFile(
-          xcodeProject: any,
-          filePath: string,
-          opts: { target: string },
-          group: string,
-        ): void;
-        pbxCreateFileReferenceSection(xcodeProject: any, filePath: string): void;
+        addBuildSourceFileToGroup(options: {
+          filepath: string;
+          groupName: string;
+          project: any;
+        }): any;
+        ensureGroupRecursively(project: any, filepath: string): unknown;
       };
-      const target = xcodeUtils.findFirstTarget(project);
+      const groupName = dirname(filePath);
 
-      xcodeUtils.pbxCreateFileReferenceSection(project, filePath);
-      xcodeUtils.pbxAddSourceFile(project, filePath, { target: target.uuid }, projectName);
+      xcodeUtils.ensureGroupRecursively(project, groupName);
+      xcodeUtils.addBuildSourceFileToGroup({ filepath: filePath, groupName, project });
     }
 
     return currentConfig;
@@ -255,23 +447,26 @@ const withReactNativeAppIntentsBase: ConfigPlugin<ExpoAppIntentsPluginOptions> =
   rawOptions: ExpoAppIntentsPluginOptions,
 ): NativeExpoConfig => {
   let currentConfig = config as ExpoAppConfig;
-  const options = defineAppIntentsConfig(rawOptions);
+  const resolveOptions = createOptionsResolver(rawOptions);
 
-  currentConfig = withInfoPlist(currentConfig, (modConfig) => {
+  currentConfig = withInfoPlist(currentConfig, async (modConfig) => {
+    const options = await resolveOptions(modConfig.modRequest.projectRoot);
     modConfig.modResults = applyInfoPlistAppIntentsConfig(modConfig.modResults, options);
     return modConfig;
   });
 
-  currentConfig = withEntitlementsPlist(currentConfig, (modConfig) => {
+  currentConfig = withEntitlementsPlist(currentConfig, async (modConfig) => {
+    const options = await resolveOptions(modConfig.modRequest.projectRoot);
     modConfig.modResults = applyEntitlementsAppIntentsConfig(modConfig.modResults, options);
     return modConfig;
   });
 
-  currentConfig = withGeneratedIOSSource(currentConfig, options);
+  currentConfig = withGeneratedIOSSource(currentConfig, resolveOptions);
 
   currentConfig = withDangerousMod(currentConfig, [
     "ios",
     async (modConfig) => {
+      const options = await resolveOptions(modConfig.modRequest.projectRoot);
       await runPlatformCodegen(currentConfig, options, modConfig.modRequest.projectRoot, "ios");
       return modConfig;
     },
@@ -280,8 +475,10 @@ const withReactNativeAppIntentsBase: ConfigPlugin<ExpoAppIntentsPluginOptions> =
   currentConfig = withDangerousMod(currentConfig, [
     "android",
     async (modConfig) => {
+      const options = await resolveOptions(modConfig.modRequest.projectRoot);
+
       try {
-        await access(join(modConfig.modRequest.projectRoot, DEFAULT_ANDROID_MANIFEST_PATH));
+        await access(join(modConfig.modRequest.projectRoot, resolveExpoAndroidManifest(options)));
       } catch {
         return modConfig;
       }

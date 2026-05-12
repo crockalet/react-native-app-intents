@@ -124,6 +124,37 @@ Use `--check` in CI to fail when generated files are stale:
 npx app-intents generate --check
 ```
 
+## Expo plugin
+
+Use the package root as the Expo config plugin. The plugin auto-loads
+`app-intents.config.ts` from your app root, so Expo prebuild and the CLI share
+one source of truth:
+
+```json
+{
+  "expo": {
+    "plugins": ["@crockalet/react-native-app-intents"]
+  }
+}
+```
+
+If your config lives elsewhere, pass `configPath`:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      ["@crockalet/react-native-app-intents", { "configPath": "./config/app-intents.ts" }]
+    ]
+  }
+}
+```
+
+Expo mode honors configured `ios.output`, `android.manifest`,
+`android.shortcutsOutput`, and `android.shortcutsStringsOutput` paths relative to
+the app root. An `ios.output` without an `ios/` prefix is written under the
+generated iOS project folder.
+
 ## Expo setup
 
 Add the package as an Expo config plugin:

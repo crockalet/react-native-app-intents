@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
+import { loadModule } from "@expo/require-utils";
 import {
   normalizeIntentDefinitions,
   normalizeReferencedEntities,
@@ -172,8 +172,7 @@ async function loadIntentSources(
   const loaded: LoadedIntentSource[] = [];
 
   for (const modulePath of modulePaths) {
-    const moduleUrl = pathToFileURL(modulePath).href;
-    const moduleExports = await import(moduleUrl);
+    const moduleExports = await loadModule(modulePath);
 
     for (const [exportName, value] of Object.entries(moduleExports)) {
       if (!isIntentDefinition(value)) {

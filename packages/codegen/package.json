@@ -22,6 +22,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@expo/require-utils": "^55.0.5",
     "@react-native-app-intents/core": "workspace:*"
   }
 }

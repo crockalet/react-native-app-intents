@@ -23,6 +23,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@expo/config": "^55.0.16",
     "@expo/config-plugins": "^55.0.8",
     "@react-native-app-intents/codegen": "workspace:*"
   }

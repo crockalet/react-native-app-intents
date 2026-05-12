@@ -1,0 +1,21 @@
+{
+  "name": "@react-native-app-intents/example-expo",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "start": "expo start",
+    "test:plugin": "expo config --type prebuild --json"
+  },
+  "dependencies": {
+    "@crockalet/react-native-app-intents": "workspace:*",
+    "expo": "^55.0.23",
+    "react": "19.2.3",
+    "react-native": "0.85.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "typescript": "^5.8.3"
+  }
+}

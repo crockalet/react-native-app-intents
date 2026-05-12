@@ -12,6 +12,8 @@ import {
   applyEntitlementsAppIntentsConfig,
   applyInfoPlistAppIntentsConfig,
   patchSwiftAppDelegate,
+  resolveExpoAppIntentsPluginOptions,
+  resolveExpoCodegenConfig,
   withAppIntents,
 } from "../src/index.js";
 
@@ -78,6 +80,119 @@ test("Expo config helpers patch Info.plist and entitlements", () => {
   assert.deepEqual(entitlements["com.apple.security.application-groups"], [
     "group.dev.expo.example",
   ]);
+});
+
+test("expo plugin auto-loads app-intents.config.ts by default", async () => {
+  const repoRoot = resolve(import.meta.dirname, "../../..");
+  const cwd = await mkdtemp(join(repoRoot, ".tmp-expo-config-"));
+
+  try {
+    await writeFile(
+      join(cwd, "app-intents.config.ts"),
+      [
+        'const intents: string[] = ["src/**/*.intents.ts"];',
+        "",
+        "export default {",
+        "  intents,",
+        '  scheme: "expoexample",',
+        "  ios: {",
+        '    output: "ios/ExpoExample/AppIntents.swift",',
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const options = await resolveExpoAppIntentsPluginOptions(undefined, cwd);
+
+    assert.deepEqual(options.intents, ["src/**/*.intents.ts"]);
+    assert.equal(options.scheme, "expoexample");
+    assert.equal(options.ios?.output, "ios/ExpoExample/AppIntents.swift");
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("expo plugin supports configPath with inline overrides", async () => {
+  const repoRoot = resolve(import.meta.dirname, "../../..");
+  const cwd = await mkdtemp(join(repoRoot, ".tmp-expo-config-path-"));
+
+  try {
+    await mkdir(join(cwd, "config"), { recursive: true });
+    await writeFile(
+      join(cwd, "config/app-intents.config.ts"),
+      [
+        "export default {",
+        '  intents: "src/**/*.intents.ts",',
+        '  scheme: "fromfile",',
+        "  ios: {",
+        '    output: "ios/FromFile.swift",',
+        '    siriUsageDescription: "From file.",',
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const options = await resolveExpoAppIntentsPluginOptions(
+      {
+        configPath: "config/app-intents.config.ts",
+        scheme: "fromplugin",
+        ios: { output: "ios/FromPlugin.swift" },
+      },
+      cwd,
+    );
+
+    assert.deepEqual(options.intents, ["src/**/*.intents.ts"]);
+    assert.equal(options.scheme, "fromplugin");
+    assert.equal(options.ios?.output, "ios/FromPlugin.swift");
+    assert.equal(options.ios?.siriUsageDescription, "From file.");
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("expo plugin preserves configured native output paths", () => {
+  const options = defineAppIntentsConfig({
+    intents: ["src/**/*.intents.ts"],
+    scheme: "expoexample",
+    ios: {
+      output: "ios/Generated/ExpoAppIntents.swift",
+      appGroupIdentifier: "group.dev.expo.example",
+    },
+    android: {
+      manifest: "android/custom/AndroidManifest.xml",
+      packageName: "dev.expo.example.config",
+      shortcutsOutput: "android/custom/res/xml/expo_shortcuts.xml",
+      shortcutsStringsOutput: "android/custom/res/values/expo_shortcuts_strings.xml",
+    },
+  });
+
+  const iosConfig = resolveExpoCodegenConfig(
+    { name: "expo-app", slug: "expo-app", ios: { bundleIdentifier: "dev.expo.example" } },
+    options,
+    "/tmp/expo-app",
+    "ios",
+    "ExpoApp",
+  );
+  const androidConfig = resolveExpoCodegenConfig(
+    { name: "expo-app", slug: "expo-app", android: { package: "dev.expo.example" } },
+    options,
+    "/tmp/expo-app",
+    "android",
+  );
+
+  assert.equal(iosConfig.ios?.output, "ios/Generated/ExpoAppIntents.swift");
+  assert.equal(iosConfig.ios?.bundleIdentifier, "dev.expo.example");
+  assert.equal(androidConfig.android?.manifest, "android/custom/AndroidManifest.xml");
+  assert.equal(androidConfig.android?.shortcutsOutput, "android/custom/res/xml/expo_shortcuts.xml");
+  assert.equal(
+    androidConfig.android?.shortcutsStringsOutput,
+    "android/custom/res/values/expo_shortcuts_strings.xml",
+  );
+  assert.equal(androidConfig.android?.packageName, "dev.expo.example.config");
 });
 
 test("expo plugin config drives codegen on expo-style paths", async () => {

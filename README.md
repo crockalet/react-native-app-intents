@@ -74,7 +74,9 @@ appIntents.onIntent(openOrder, (params) => {
 
 ## Expo setup
 
-Use the package as an Expo config plugin:
+Use the package root as an Expo config plugin. The plugin reads the same
+`app-intents.config.ts` file used by the CLI, so `app.config.ts` does not need to
+duplicate your intent configuration:
 
 ```json
 {
@@ -83,6 +85,23 @@ Use the package as an Expo config plugin:
   }
 }
 ```
+
+To use a different config file, pass `configPath`:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      ["@crockalet/react-native-app-intents", { "configPath": "./config/app-intents.ts" }]
+    ]
+  }
+}
+```
+
+In Expo prebuilds, configured `ios.output`, `android.manifest`,
+`android.shortcutsOutput`, and `android.shortcutsStringsOutput` paths are honored
+relative to the app root. If `ios.output` does not start with `ios/`, it is
+written under the generated iOS project folder.
 
 ## Current features
 
