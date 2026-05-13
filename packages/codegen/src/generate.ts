@@ -46,6 +46,7 @@ interface RenderedArtifacts {
 interface AndroidShortcutArtifact {
   capabilityBindings?: readonly AndroidShortcutCapabilityBinding[];
   id: string;
+  iconResourceName?: string;
   longLabel: string;
   shortLabel: string;
   shortLabelResourceName: string;
@@ -332,6 +333,9 @@ function getAndroidShortcutArtifact(
     longLabelResourceName: `react_native_app_intents_${resourceBaseName}_long_label`,
     shortLabel: intent.title,
     shortLabelResourceName: `react_native_app_intents_${resourceBaseName}_short_label`,
+    ...(intent.appShortcut.iconAndroidResourceName
+      ? { iconResourceName: intent.appShortcut.iconAndroidResourceName }
+      : {}),
     ...(intent.androidBii
       ? {
           capabilityBindings: getAndroidCapabilityBindings(intent, defaultParams, entitiesById),
@@ -526,6 +530,9 @@ function getAndroidCapabilityInventoryShortcuts(
         longLabelResourceName: `react_native_app_intents_${toAndroidResourceName(shortcutId)}_long_label`,
         shortLabel: inventoryItem.displayRepresentation.title,
         shortLabelResourceName: `react_native_app_intents_${toAndroidResourceName(shortcutId)}_short_label`,
+        ...(intent.appShortcut.iconAndroidResourceName
+          ? { iconResourceName: intent.appShortcut.iconAndroidResourceName }
+          : {}),
         url: buildIntentUrl(scheme, intent.id, params),
       } satisfies AndroidShortcutArtifact;
     });
@@ -533,11 +540,13 @@ function getAndroidCapabilityInventoryShortcuts(
 }
 
 function renderAndroidShortcutXml(shortcut: AndroidShortcutArtifact, packageName: string): string {
+  const iconResourceName = shortcut.iconResourceName ?? "@mipmap/ic_launcher";
+
   return [
     "    <shortcut",
     `        android:shortcutId="${escapeXml(shortcut.id)}"`,
     '        android:enabled="true"',
-    '        android:icon="@mipmap/ic_launcher"',
+    `        android:icon="${escapeXml(iconResourceName)}"`,
     `        android:shortcutShortLabel="@string/${shortcut.shortLabelResourceName}"`,
     `        android:shortcutLongLabel="@string/${shortcut.longLabelResourceName}">`,
     "        <intent",
@@ -882,6 +891,7 @@ function renderSwift(
       const phrases = [
         ...new Set(intent.phrases.map((phrase) => phrase.swiftAppShortcutPhrase)),
       ].map((phrase) => `          "${toSwiftAppShortcutPhrase(phrase, parametersByName)}",`);
+      const shortcutIconSystemName = intent.appShortcut.iconSystemName ?? "square.grid.2x2";
 
       return [
         "      AppShortcut(",
@@ -890,7 +900,7 @@ function renderSwift(
         ...phrases,
         "        ],",
         `        shortTitle: "${escapeSwiftString(intent.title)}",`,
-        '        systemImageName: "square.grid.2x2"',
+        `        systemImageName: "${escapeSwiftString(shortcutIconSystemName)}"`,
         "      ),",
       ].join("\n");
     });

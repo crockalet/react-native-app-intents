@@ -104,6 +104,31 @@ test("normalizeIntentDefinitions derives app shortcut phrases", () => {
   assert.equal(normalized?.phrases[0]?.appShortcutPhrase, "Show my order in ${.applicationName}");
 });
 
+test("normalizeIntentDefinitions captures app shortcut icon metadata", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    phrases: ["Show my order ${orderNumber}"],
+    params: {
+      orderNumber: p.string(),
+    },
+    surfaces: {
+      appShortcut: {
+        icon: {
+          androidResourceName: "@mipmap/ic_launcher_round",
+          systemName: "shippingbox",
+        },
+      },
+    },
+  });
+
+  const [normalized] = normalizeIntentDefinitions([openOrder]);
+
+  assert.equal(normalized?.surfaces.appShortcut, true);
+  assert.equal(normalized?.appShortcut.iconAndroidResourceName, "@mipmap/ic_launcher_round");
+  assert.equal(normalized?.appShortcut.iconSystemName, "shippingbox");
+});
+
 test("normalizeReferencedEntities discovers entity dependencies from intent params", () => {
   const Order = defineEntity({
     id: "Order",

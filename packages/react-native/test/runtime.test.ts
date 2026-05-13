@@ -108,6 +108,11 @@ test("runtime parses initial urls and emits typed handlers", async () => {
   await runtime.clearDonations();
   await runtime.updateDynamicShortcuts([
     {
+      icon: {
+        androidResourceName: "@mipmap/ic_launcher_round",
+        iosTemplateImageName: "burger",
+        systemName: "shippingbox",
+      },
       intent: openOrder,
       params: { orderNumber: "5678" },
       shortTitle: "Open Order 1234",
@@ -132,6 +137,11 @@ test("runtime parses initial urls and emits typed handlers", async () => {
   assert.deepEqual(shortcutUpdates[0], [
     {
       id: "openOrder",
+      icon: {
+        androidResourceName: "@mipmap/ic_launcher_round",
+        iosTemplateImageName: "burger",
+        systemName: "shippingbox",
+      },
       title: "Open Order 1234",
       url: "example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%225678%22%7D",
     },

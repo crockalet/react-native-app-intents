@@ -31,7 +31,15 @@ class ReactNativeAppIntentsModule(
   fun donate(intentId: String, title: String, url: String, payload: String, promise: Promise) {
     try {
       val shortcutId = createDonationShortcutId(intentId, payload)
-      val shortcut = createShortcut(shortcutId, title, null, url, reactApplicationContext.packageName, true)
+      val shortcut = createShortcut(
+        shortcutId,
+        title,
+        null,
+        url,
+        reactApplicationContext.packageName,
+        null,
+        true,
+      )
 
       if (!ShortcutManagerCompat.pushDynamicShortcut(reactApplicationContext, shortcut)) {
         promise.reject(
@@ -100,8 +108,9 @@ class ReactNativeAppIntentsModule(
     val title = shortcut.getString("title") ?: shortcutId
     val subtitle = shortcut.getString("subtitle")
     val url = shortcut.getString("url") ?: error("Shortcut url is required.")
+    val iconResourceName = shortcut.getMap("icon")?.getString("androidResourceName")
 
-    return createShortcut(shortcutId, title, subtitle, url, packageName, false)
+    return createShortcut(shortcutId, title, subtitle, url, packageName, iconResourceName, false)
   }
 
   private fun createShortcut(
@@ -110,6 +119,7 @@ class ReactNativeAppIntentsModule(
     subtitle: String?,
     url: String,
     packageName: String,
+    iconResourceName: String?,
     longLived: Boolean,
   ): ShortcutInfoCompat {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
@@ -122,7 +132,12 @@ class ReactNativeAppIntentsModule(
     val builder = ShortcutInfoCompat.Builder(reactApplicationContext, shortcutId)
       .setShortLabel(title)
       .setIntent(intent)
-      .setIcon(IconCompat.createWithResource(reactApplicationContext, android.R.mipmap.sym_def_app_icon))
+      .setIcon(
+        IconCompat.createWithResource(
+          reactApplicationContext,
+          resolveShortcutIconResourceId(iconResourceName) ?: getDefaultShortcutIconResourceId(),
+        ),
+      )
 
     if (subtitle != null) {
       builder.setLongLabel(subtitle)
@@ -133,6 +148,31 @@ class ReactNativeAppIntentsModule(
     }
 
     return builder.build()
+  }
+
+  private fun getDefaultShortcutIconResourceId(): Int =
+    reactApplicationContext.applicationInfo.icon.takeIf { it != 0 } ?: android.R.mipmap.sym_def_app_icon
+
+  private fun resolveShortcutIconResourceId(iconResourceName: String?): Int? {
+    if (iconResourceName == null) {
+      return null
+    }
+
+    val match = ANDROID_SHORTCUT_ICON_PATTERN.matchEntire(iconResourceName)
+      ?: error("""Android shortcut icons must look like "@drawable/name" or "@mipmap/name".""")
+    val resourceType = match.groupValues[1]
+    val resourceName = match.groupValues[2]
+    val resourceId = reactApplicationContext.resources.getIdentifier(
+      resourceName,
+      resourceType,
+      reactApplicationContext.packageName,
+    )
+
+    if (resourceId == 0) {
+      error("""Android shortcut icon resource "$iconResourceName" was not found.""")
+    }
+
+    return resourceId
   }
 
   private fun getShortcutIds(key: String): Set<String> =
@@ -159,6 +199,7 @@ class ReactNativeAppIntentsModule(
     private const val DONATION_SHORTCUT_IDS_KEY = "donationShortcutIds"
     private const val DYNAMIC_SHORTCUT_IDS_KEY = "dynamicShortcutIds"
     private const val PREFERENCES_NAME = "ReactNativeAppIntents"
+    private val ANDROID_SHORTCUT_ICON_PATTERN = Regex("^@(drawable|mipmap)/([A-Za-z0-9_]+)$")
     private val pendingUrls = ArrayDeque<String>()
     private var reactContextRef: WeakReference<ReactApplicationContext>? = null
 

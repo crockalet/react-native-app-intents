@@ -10,5 +10,8 @@ export default {
   android: {
     package: "com.crockalet.appintents.expo",
   },
-  plugins: ["@crockalet/react-native-app-intents"],
+  plugins: [
+    ["expo-asset", { assets: ["./src/assets/burger.png"] }],
+    "@crockalet/react-native-app-intents",
+  ],
 };

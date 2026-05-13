@@ -149,12 +149,20 @@ function AppContent(): ReactElement {
             onPress={() => {
               void exampleRuntime.updateDynamicShortcuts([
                 {
+                  icon: {
+                    androidResourceName: "@mipmap/ic_launcher_round",
+                    systemName: "shippingbox",
+                  },
                   intent: openOrder,
                   params: { orderNumber: "1234" },
                   shortTitle: "Open Order 1234",
                   longTitle: "Open order 1234 in the example app",
                 },
                 {
+                  icon: {
+                    androidResourceName: "@mipmap/ic_launcher",
+                    systemName: "bag",
+                  },
                   intent: openSavedOrder,
                   params: { order: savedOrder },
                   shortTitle: "Open Saved Order",

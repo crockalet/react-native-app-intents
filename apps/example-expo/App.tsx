@@ -22,10 +22,27 @@ export default function App() {
     });
   }, [appIntents]);
 
+  useEffect(() => {
+    void appIntents.updateDynamicShortcuts([
+      {
+        icon: {
+          androidResourceName: "@drawable/burger",
+          iosTemplateImageName: "burger",
+          systemName: "shippingbox",
+        },
+        intent: openOrder,
+        params: { orderNumber: "1234" },
+        shortTitle: "Open burger order",
+        longTitle: "Open order 1234",
+      },
+    ]);
+  }, [appIntents]);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>React Native App Intents</Text>
       <Text>Expo config plugin fixture</Text>
+      <Text>Shortcut icon: burger asset</Text>
       <Text>Last order: {lastOrderNumber ?? "none"}</Text>
     </View>
   );

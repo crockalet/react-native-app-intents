@@ -173,12 +173,26 @@ RCT_REMAP_METHOD(
       NSString *title = shortcut[@"title"];
       NSString *subtitle = shortcut[@"subtitle"];
       NSString *url = shortcut[@"url"];
+      NSDictionary *iconPayload =
+        [shortcut[@"icon"] isKindOfClass:[NSDictionary class]] ? shortcut[@"icon"] : nil;
+      NSString *systemImageName = iconPayload[@"systemName"];
+      NSString *templateImageName = iconPayload[@"iosTemplateImageName"];
       NSDictionary *userInfo = url == nil ? @{} : @{ @"url": url };
+      UIApplicationShortcutIcon *icon = nil;
+
+      if (templateImageName != nil) {
+        icon = [UIApplicationShortcutIcon iconWithTemplateImageName:templateImageName];
+      } else if (systemImageName != nil) {
+        if (@available(iOS 13.0, *)) {
+          icon = [UIApplicationShortcutIcon iconWithSystemImageName:systemImageName];
+        }
+      }
+
       UIApplicationShortcutItem *item = [[UIApplicationShortcutItem alloc]
         initWithType:shortcutId
         localizedTitle:title
         localizedSubtitle:subtitle
-        icon:nil
+        icon:icon
         userInfo:userInfo];
       [items addObject:item];
     }

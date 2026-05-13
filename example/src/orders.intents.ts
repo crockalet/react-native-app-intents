@@ -49,7 +49,12 @@ export const openOrder = defineIntent({
   surfaces: {
     siri: true,
     spotlight: true,
-    appShortcut: true,
+    appShortcut: {
+      icon: {
+        androidResourceName: "@mipmap/ic_launcher_round",
+        systemName: "shippingbox",
+      },
+    },
     assistant: true,
   },
   androidBii: "actions.intent.GET_ORDER",

@@ -57,7 +57,7 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
         '    orderNumber: p.string({ androidBiiParam: "order", default: "1234", title: "Order Number" }),',
         "  },",
         "  surfaces: {",
-        "    appShortcut: true,",
+        '    appShortcut: { icon: { androidResourceName: "@mipmap/ic_launcher_round", systemName: "shippingbox" } },',
         "  },",
         '  androidBii: "actions.intent.GET_ORDER",',
         "});",
@@ -125,7 +125,10 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
     );
     assert.match(generatedSwift, /defaults\.synchronize\(\)/);
     assert.match(generatedSwift, /Open \\\(\\\.\$order\) in \\\(.applicationName\)/);
+    assert.match(generatedSwift, /systemImageName: "shippingbox"/);
+    assert.match(generatedSwift, /systemImageName: "square\.grid\.2x2"/);
     assert.match(generatedShortcuts, /android:shortcutId="openOrder"/);
+    assert.match(generatedShortcuts, /android:icon="@mipmap\/ic_launcher_round"/);
     assert.match(generatedShortcuts, /<capability android:name="actions.intent.GET_ORDER">/);
     assert.match(generatedShortcuts, /<parameter android:name="order" \/>/);
     assert.match(generatedShortcuts, /android:shortcutId="openSavedOrder_Order_1"/);
@@ -135,6 +138,7 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
       /android:shortcutShortLabel="@string\/react_native_app_intents_open_order_short_label"/,
     );
     assert.match(generatedShortcuts, /example:\/\/app-intents\/openSavedOrder\?payload=/);
+    assert.match(generatedShortcuts, /android:icon="@mipmap\/ic_launcher"/);
     assert.match(
       generatedShortcutStrings,
       /<string name="react_native_app_intents_open_order_short_label">Open Order<\/string>/,

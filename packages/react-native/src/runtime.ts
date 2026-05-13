@@ -1,4 +1,9 @@
-import type { AnyParameterDefinition, IntentDefinition, ParamsOf } from "./core/index.js";
+import type {
+  AnyParameterDefinition,
+  DynamicShortcutIcon,
+  IntentDefinition,
+  ParamsOf,
+} from "./core/index.js";
 import type { AppIntentsNativeModule, NativeShortcutPayload } from "./native.js";
 
 type MaybePromise = void | Promise<void>;
@@ -20,6 +25,7 @@ export type IntentEventUnion<TIntents extends IntentTuple> = {
 
 export interface DynamicShortcut<TIntent extends IntentDefinition<any> = IntentDefinition<any>> {
   id?: string;
+  icon?: DynamicShortcutIcon;
   intent: TIntent;
   params: ParamsOf<TIntent>;
   shortTitle?: string;
@@ -660,6 +666,27 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
 
         if (shortcut.longTitle) {
           payload.subtitle = shortcut.longTitle;
+        }
+
+        if (shortcut.icon?.systemName) {
+          payload.icon = {
+            ...payload.icon,
+            systemName: shortcut.icon.systemName,
+          };
+        }
+
+        if (shortcut.icon?.androidResourceName) {
+          payload.icon = {
+            ...payload.icon,
+            androidResourceName: shortcut.icon.androidResourceName,
+          };
+        }
+
+        if (shortcut.icon?.iosTemplateImageName) {
+          payload.icon = {
+            ...payload.icon,
+            iosTemplateImageName: shortcut.icon.iosTemplateImageName,
+          };
         }
 
         return payload;

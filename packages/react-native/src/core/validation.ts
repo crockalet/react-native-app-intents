@@ -1,6 +1,11 @@
 import type { EntityDefinition, EntityDisplayRepresentation, EntityShape } from "./entity.js";
 import type { AnyParameterDefinition, LocalizedText, ObjectParameterDefinition } from "./schema.js";
-import type { IntentBehavior, IntentDefinition, IntentSurfaces } from "./intent.js";
+import type {
+  AppShortcutSurfaceOptions,
+  IntentBehavior,
+  IntentDefinition,
+  IntentSurfaces,
+} from "./intent.js";
 
 const APP_NAME_PLACEHOLDER = "${.applicationName}";
 const PLACEHOLDER_PATTERN = /\$\{([^}]+)\}/g;
@@ -62,6 +67,7 @@ export interface NormalizedEntityMetadata<
 export interface NormalizedIntentMetadata<
   TIntent extends IntentDefinition<any> = IntentDefinition<any>,
 > {
+  appShortcut: NormalizedAppShortcutMetadata;
   androidBii?: string;
   behavior: Required<IntentBehavior>;
   description?: string;
@@ -72,6 +78,20 @@ export interface NormalizedIntentMetadata<
   surfaces: Required<IntentSurfaces>;
   title: string;
 }
+
+export interface NormalizedIntentSurfaces {
+  appShortcut: boolean;
+  assistant: boolean;
+  siri: boolean;
+  spotlight: boolean;
+}
+
+export interface NormalizedAppShortcutMetadata {
+  iconAndroidResourceName?: string;
+  iconSystemName?: string;
+}
+
+const ANDROID_SHORTCUT_ICON_RESOURCE_PATTERN = /^@(drawable|mipmap)\/[A-Za-z0-9_]+$/;
 
 function appendIssue(issues: string[], scopeId: string, message: string): void {
   issues.push(`[${scopeId}] ${message}`);
@@ -257,9 +277,51 @@ function normalizePhrases(
   });
 }
 
-function normalizeSurfaces(surfaces: IntentSurfaces | undefined): Required<IntentSurfaces> {
+function normalizeAppShortcutMetadata(
+  appShortcut: IntentSurfaces["appShortcut"] | undefined,
+  intentId: string,
+  issues: string[],
+): NormalizedAppShortcutMetadata {
+  const options =
+    typeof appShortcut === "object" && appShortcut !== null
+      ? (appShortcut as AppShortcutSurfaceOptions)
+      : undefined;
+  const androidResourceName = options?.icon?.androidResourceName;
+  const iconSystemName = options?.icon?.systemName;
+  const normalized: NormalizedAppShortcutMetadata = {};
+
+  if (androidResourceName) {
+    if (!ANDROID_SHORTCUT_ICON_RESOURCE_PATTERN.test(androidResourceName)) {
+      appendIssue(
+        issues,
+        intentId,
+        'App Shortcut androidResourceName must use an "@drawable/..." or "@mipmap/..." resource reference.',
+      );
+    } else {
+      normalized.iconAndroidResourceName = androidResourceName;
+    }
+  }
+
+  if (iconSystemName) {
+    normalized.iconSystemName = iconSystemName;
+  }
+
+  if (!normalized.iconAndroidResourceName && !normalized.iconSystemName && options?.icon) {
+    appendIssue(
+      issues,
+      intentId,
+      "App Shortcut icon must include systemName and/or androidResourceName.",
+    );
+  }
+
+  return normalized;
+}
+
+function normalizeSurfaces(surfaces: IntentSurfaces | undefined): NormalizedIntentSurfaces {
+  const appShortcut = surfaces?.appShortcut;
+
   return {
-    appShortcut: surfaces?.appShortcut === true,
+    appShortcut: appShortcut !== undefined && appShortcut !== false,
     assistant: surfaces?.assistant === true,
     siri: surfaces?.siri === true,
     spotlight: surfaces?.spotlight === true,
@@ -548,6 +610,7 @@ export function normalizeIntentDefinition<TIntent extends IntentDefinition<any>>
     androidBii?: string;
     description?: string;
   } = {
+    appShortcut: normalizeAppShortcutMetadata(intent.surfaces?.appShortcut, intent.id, issues),
     behavior: normalizeBehavior(intent.behavior),
     id: intent.id,
     intent,

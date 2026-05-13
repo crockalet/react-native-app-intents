@@ -45,7 +45,17 @@ export const openOrder = defineIntent({
   params: {
     orderNumber: p.string({ title: "Order number", default: "1234" }),
   },
-  surfaces: { siri: true, spotlight: true, appShortcut: true, assistant: true },
+  surfaces: {
+    siri: true,
+    spotlight: true,
+    appShortcut: {
+      icon: {
+        androidResourceName: "@mipmap/ic_launcher_round",
+        systemName: "shippingbox",
+      },
+    },
+    assistant: true,
+  },
   androidBii: "actions.intent.GET_ORDER",
 });
 ```
@@ -71,6 +81,48 @@ appIntents.onIntent(openOrder, (params) => {
   // Navigate to the requested order.
 });
 ```
+
+For auth-gated apps, donate only after a real user action, and clear donations
+plus dynamic shortcuts on logout or when the feature is disabled:
+
+```ts
+import { useEffect } from "react";
+
+async function handleOpenedOrder(orderNumber: string) {
+  await appIntents.donate(openOrder, { orderNumber });
+}
+
+useEffect(() => {
+  if (!session || !flags.orderShortcuts) {
+    void appIntents.clearDonations();
+    void appIntents.updateDynamicShortcuts([]);
+    return;
+  }
+
+  void appIntents.updateDynamicShortcuts([
+    {
+      icon: {
+        androidResourceName: "@mipmap/ic_launcher_round",
+        systemName: "shippingbox",
+      },
+      intent: openOrder,
+      params: { orderNumber: session.lastViewedOrderNumber },
+      shortTitle: "Open last order",
+      longTitle: `Open order ${session.lastViewedOrderNumber}`,
+    },
+  ]);
+}, [session, flags.orderShortcuts]);
+
+async function logout() {
+  await auth.signOut();
+  await appIntents.clearDonations();
+  await appIntents.updateDynamicShortcuts([]);
+}
+```
+
+`surfaces.appShortcut` still accepts `true`, but you can also pass an object to set
+an iOS SF Symbol (`systemName`) and/or an Android shortcut resource reference
+(`androidResourceName`, such as `@mipmap/ic_launcher_round`).
 
 ## Expo setup
 
@@ -102,6 +154,60 @@ In Expo prebuilds, configured `ios.output`, `android.manifest`,
 `android.shortcutsOutput`, and `android.shortcutsStringsOutput` paths are honored
 relative to the app root. If `ios.output` does not start with `ios/`, it is
 written under the generated iOS project folder.
+
+### Custom shortcut icons with `expo-asset`
+
+For custom **Android** shortcut icons in Expo apps, add the image files to native
+resources with the `expo-asset` config plugin, then reference the generated
+resource name from `androidResourceName`:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      ["expo-asset", { "assets": ["./assets/shortcuts/open_order.png"] }],
+      "@crockalet/react-native-app-intents"
+    ]
+  }
+}
+```
+
+```ts
+surfaces: {
+  appShortcut: {
+    icon: {
+      androidResourceName: "@drawable/open_order",
+      systemName: "shippingbox",
+    },
+  },
+}
+```
+
+For iOS **dynamic shortcuts**, you can also point at a bundled template image
+name from the same asset file:
+
+```ts
+await appIntents.updateDynamicShortcuts([
+  {
+    icon: {
+      androidResourceName: "@drawable/open_order",
+      iosTemplateImageName: "open_order",
+      systemName: "shippingbox",
+    },
+    intent: openOrder,
+    params: { orderNumber: "1234" },
+    shortTitle: "Open order #1234",
+  },
+]);
+```
+
+`expo-asset` uses the file name as the native resource name, so keep shortcut
+asset files lowercase with underscores (for example, `open_order.png`). Run
+`npx expo prebuild` again after adding or renaming assets.
+
+On iOS, `iosTemplateImageName` only applies to **dynamic shortcuts** and renders
+as a template/tinted silhouette. Generated App Shortcuts still use `systemName`
+only; Expo-bundled PNG assets are not used there.
 
 ## Current features
 

@@ -59,7 +59,12 @@ export const openOrder = defineIntent({
   surfaces: {
     siri: true,
     spotlight: true,
-    appShortcut: true,
+    appShortcut: {
+      icon: {
+        androidResourceName: "@mipmap/ic_launcher_round",
+        systemName: "shippingbox",
+      },
+    },
     assistant: true,
   },
   androidBii: "actions.intent.GET_ORDER",
@@ -154,6 +159,74 @@ Expo mode honors configured `ios.output`, `android.manifest`,
 `android.shortcutsOutput`, and `android.shortcutsStringsOutput` paths relative to
 the app root. An `ios.output` without an `ios/` prefix is written under the
 generated iOS project folder.
+
+## Expo custom shortcut icons
+
+Use Expo's `expo-asset` config plugin when you want a custom **Android** shortcut
+icon from an image file instead of a built-in launcher resource. The plugin links
+the file into the native project during prebuild, and the file name becomes the
+Android resource name.
+
+```json
+{
+  "expo": {
+    "plugins": [
+      ["expo-asset", { "assets": ["./assets/shortcuts/open_order.png"] }],
+      "@crockalet/react-native-app-intents"
+    ]
+  }
+}
+```
+
+Then reference that asset from your intent definition or dynamic shortcut:
+
+```ts
+export const openOrder = defineIntent({
+  id: "openOrder",
+  title: "Open Order",
+  phrases: ["Open order ${orderNumber} in ${.applicationName}"],
+  params: {
+    orderNumber: p.string({ default: "1234" }),
+  },
+  surfaces: {
+    appShortcut: {
+      icon: {
+        androidResourceName: "@drawable/open_order",
+        systemName: "shippingbox",
+      },
+    },
+  },
+});
+```
+
+```ts
+await appIntents.updateDynamicShortcuts([
+  {
+    icon: {
+      androidResourceName: "@drawable/open_order",
+      iosTemplateImageName: "open_order",
+      systemName: "shippingbox",
+    },
+    intent: openOrder,
+    params: { orderNumber: "1234" },
+    shortTitle: "Open order #1234",
+  },
+]);
+```
+
+Notes:
+
+1. `expo-asset` uses the file name as the native resource name, so
+   `assets/shortcuts/open_order.png` becomes `@drawable/open_order`.
+2. Keep file names lowercase with underscores so they remain valid Android
+   resource names.
+3. Re-run `npx expo prebuild` after adding, removing, or renaming shortcut icon
+   files.
+4. On iOS dynamic shortcuts, use `iosTemplateImageName: "open_order"` (no file
+   extension) to point at the bundled asset by name.
+5. iOS template shortcut icons render as a single-color silhouette. Generated
+   App Shortcuts still use `systemName`; Expo-bundled PNG assets are not used
+   there.
 
 ## Expo setup
 
@@ -261,6 +334,11 @@ const unsubscribe = appIntents.onIntent(openOrder, (params) => {
 ```ts
 await appIntents.updateDynamicShortcuts([
   {
+    icon: {
+      androidResourceName: "@mipmap/ic_launcher_round",
+      iosTemplateImageName: "burger",
+      systemName: "shippingbox",
+    },
     intent: openOrder,
     params: { orderNumber: "1234" },
     shortTitle: "Open order #1234",
@@ -268,6 +346,10 @@ await appIntents.updateDynamicShortcuts([
   },
 ]);
 ```
+
+`surfaces.appShortcut` can be either `true` or an object with an iOS SF Symbol
+(`systemName`) and/or an Android shortcut resource reference (`androidResourceName`).
+For dynamic shortcuts, `icon` can additionally include `iosTemplateImageName`.
 
 ## Donations
 
@@ -279,6 +361,55 @@ await appIntents.clearDonations();
 On iOS this creates an `NSUserActivity` eligible for system predictions and clears donated
 interactions/user activities. On Android this publishes a removable long-lived shortcut donation and
 clears the shortcut donations created by `donate`.
+
+## Auth-gated apps
+
+For auth-gated or feature-flagged flows, treat donations and dynamic shortcuts as
+derived session state. Donate when the user completes a real action, and clear
+everything on logout or when the feature is disabled:
+
+```ts
+import { useEffect } from "react";
+
+import { createAppIntentsRuntime } from "@crockalet/react-native-app-intents";
+import { openOrder } from "./orders.intents";
+
+const appIntents = createAppIntentsRuntime({
+  scheme: "myapp",
+  intents: [openOrder] as const,
+});
+
+async function handleOpenedOrder(orderNumber: string) {
+  // Only donate actions the user actually performed.
+  await appIntents.donate(openOrder, { orderNumber });
+}
+
+useEffect(() => {
+  if (!session || !flags.orderShortcuts) {
+    void appIntents.clearDonations();
+    void appIntents.updateDynamicShortcuts([]);
+    return;
+  }
+
+  void appIntents.updateDynamicShortcuts([
+    {
+      intent: openOrder,
+      params: { orderNumber: session.lastViewedOrderNumber },
+      shortTitle: "Open last order",
+      longTitle: `Open order ${session.lastViewedOrderNumber}`,
+    },
+  ]);
+}, [session, flags.orderShortcuts]);
+
+async function logout() {
+  await auth.signOut();
+  await appIntents.clearDonations();
+  await appIntents.updateDynamicShortcuts([]);
+}
+```
+
+This keeps Siri/App Shortcuts suggestions aligned with the current account state
+instead of exposing stale shortcuts after logout.
 
 ## Current features
 

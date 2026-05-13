@@ -11,6 +11,16 @@ export const openOrder = defineIntent({
       default: "1234",
     }),
   },
-  surfaces: { siri: true, spotlight: true, appShortcut: true, assistant: true },
+  surfaces: {
+    siri: true,
+    spotlight: true,
+    appShortcut: {
+      icon: {
+        androidResourceName: "@drawable/burger",
+        systemName: "shippingbox",
+      },
+    },
+    assistant: true,
+  },
   androidBii: "actions.intent.GET_ORDER",
 });

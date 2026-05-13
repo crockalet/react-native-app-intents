@@ -196,7 +196,7 @@ struct ExampleAppShortcuts: AppShortcutsProvider {
           "Show my order in \(.applicationName)",
         ],
         shortTitle: "Open Order",
-        systemImageName: "square.grid.2x2"
+        systemImageName: "shippingbox"
       ),
       AppShortcut(
         intent: OpenSavedOrderIntent(),

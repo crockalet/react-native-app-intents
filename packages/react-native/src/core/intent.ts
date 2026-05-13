@@ -1,9 +1,22 @@
 import type { AnyParameterDefinition, InferParams, LocalizedText } from "./schema.js";
 
+export interface ShortcutIcon {
+  androidResourceName?: string;
+  systemName?: string;
+}
+
+export interface DynamicShortcutIcon extends ShortcutIcon {
+  iosTemplateImageName?: string;
+}
+
+export interface AppShortcutSurfaceOptions {
+  icon?: ShortcutIcon;
+}
+
 export interface IntentSurfaces {
   siri?: boolean;
   spotlight?: boolean;
-  appShortcut?: boolean;
+  appShortcut?: boolean | AppShortcutSurfaceOptions;
   assistant?: boolean;
 }
 

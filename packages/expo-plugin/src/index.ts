@@ -530,15 +530,24 @@ function injectQuickActionHandlerMethods(source: string): string {
     return source;
   }
 
-  const finalClassBrace = source.lastIndexOf("\n}");
+  const reactNativeDelegateIndex = source.indexOf("\nclass ReactNativeDelegate:");
+  const appDelegateClassIndex = source.indexOf("class AppDelegate:");
+  const finalClassBrace =
+    reactNativeDelegateIndex === -1
+      ? source.lastIndexOf("\n}")
+      : source.lastIndexOf("\n}", reactNativeDelegateIndex);
 
-  if (finalClassBrace === -1) {
+  if (
+    appDelegateClassIndex === -1 ||
+    finalClassBrace === -1 ||
+    finalClassBrace < appDelegateClassIndex
+  ) {
     throw new Error("Could not locate the AppDelegate class closing brace.");
   }
 
   const methods = [
     "",
-    "  func application(",
+    "  public override func application(",
     "    _ application: UIApplication,",
     "    performActionFor shortcutItem: UIApplicationShortcutItem,",
     "    completionHandler: @escaping (Bool) -> Void",

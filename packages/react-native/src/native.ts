@@ -1,5 +1,8 @@
+import type { DynamicShortcutIcon } from "./core/index.js";
+
 export interface NativeShortcutPayload {
   id: string;
+  icon?: DynamicShortcutIcon;
   title: string;
   subtitle?: string;
   url: string;

@@ -8,7 +8,7 @@
     <shortcut
         android:shortcutId="openOrder"
         android:enabled="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/ic_launcher_round"
         android:shortcutShortLabel="@string/react_native_app_intents_open_order_short_label"
         android:shortcutLongLabel="@string/react_native_app_intents_open_order_long_label">
         <intent
