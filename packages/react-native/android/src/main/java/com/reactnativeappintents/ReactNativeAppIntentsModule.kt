@@ -28,7 +28,14 @@ class ReactNativeAppIntentsModule(
   override fun getName(): String = NAME
 
   @ReactMethod
-  fun donate(intentId: String, title: String, url: String, payload: String, promise: Promise) {
+  fun donate(
+    intentId: String,
+    title: String,
+    url: String,
+    payload: String,
+    capabilityBindings: ReadableArray?,
+    promise: Promise,
+  ) {
     try {
       val shortcutId = createDonationShortcutId(intentId, payload)
       val shortcut = createShortcut(
@@ -38,6 +45,7 @@ class ReactNativeAppIntentsModule(
         url,
         reactApplicationContext.packageName,
         null,
+        readCapabilityBindings(capabilityBindings),
         true,
       )
 
@@ -109,8 +117,18 @@ class ReactNativeAppIntentsModule(
     val subtitle = shortcut.getString("subtitle")
     val url = shortcut.getString("url") ?: error("Shortcut url is required.")
     val iconResourceName = shortcut.getMap("icon")?.getString("androidResourceName")
+    val capabilityBindings = readCapabilityBindings(shortcut.getArray("capabilityBindings"))
 
-    return createShortcut(shortcutId, title, subtitle, url, packageName, iconResourceName, false)
+    return createShortcut(
+      shortcutId,
+      title,
+      subtitle,
+      url,
+      packageName,
+      iconResourceName,
+      capabilityBindings,
+      false,
+    )
   }
 
   private fun createShortcut(
@@ -120,6 +138,7 @@ class ReactNativeAppIntentsModule(
     url: String,
     packageName: String,
     iconResourceName: String?,
+    capabilityBindings: List<ShortcutCapabilityBinding>,
     longLived: Boolean,
   ): ShortcutInfoCompat {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
@@ -147,7 +166,57 @@ class ReactNativeAppIntentsModule(
       builder.setLongLived(true)
     }
 
+    applyCapabilityBindings(builder, capabilityBindings)
+
     return builder.build()
+  }
+
+  private fun readCapabilityBindings(capabilityBindings: ReadableArray?): List<ShortcutCapabilityBinding> {
+    if (capabilityBindings == null) {
+      return emptyList()
+    }
+
+    val bindings = mutableListOf<ShortcutCapabilityBinding>()
+
+    for (bindingIndex in 0 until capabilityBindings.size()) {
+      val binding = capabilityBindings.getMap(bindingIndex) ?: continue
+      val capabilityName = binding.getString("capabilityName") ?: continue
+      val parameterBindings = mutableListOf<ShortcutCapabilityParameterBinding>()
+      val parameterBindingArray = binding.getArray("parameterBindings")
+
+      if (parameterBindingArray != null) {
+        for (parameterIndex in 0 until parameterBindingArray.size()) {
+          val parameterBinding = parameterBindingArray.getMap(parameterIndex) ?: continue
+          val key = parameterBinding.getString("key") ?: continue
+          val value = parameterBinding.getString("value") ?: continue
+          parameterBindings.add(ShortcutCapabilityParameterBinding(key, value))
+        }
+      }
+
+      bindings.add(ShortcutCapabilityBinding(capabilityName, parameterBindings))
+    }
+
+    return bindings
+  }
+
+  private fun applyCapabilityBindings(
+    builder: ShortcutInfoCompat.Builder,
+    capabilityBindings: List<ShortcutCapabilityBinding>,
+  ) {
+    for (capabilityBinding in capabilityBindings) {
+      if (capabilityBinding.parameterBindings.isEmpty()) {
+        builder.addCapabilityBinding(capabilityBinding.capabilityName)
+        continue
+      }
+
+      for (parameterBinding in capabilityBinding.parameterBindings) {
+        builder.addCapabilityBinding(
+          capabilityBinding.capabilityName,
+          parameterBinding.key,
+          listOf(parameterBinding.value),
+        )
+      }
+    }
   }
 
   private fun getDefaultShortcutIconResourceId(): Int =
@@ -232,4 +301,14 @@ class ReactNativeAppIntentsModule(
       return "$DONATION_SHORTCUT_PREFIX:$digest"
     }
   }
+
+  private data class ShortcutCapabilityBinding(
+    val capabilityName: String,
+    val parameterBindings: List<ShortcutCapabilityParameterBinding>,
+  )
+
+  private data class ShortcutCapabilityParameterBinding(
+    val key: String,
+    val value: String,
+  )
 }

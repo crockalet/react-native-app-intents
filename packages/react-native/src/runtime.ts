@@ -4,7 +4,11 @@ import type {
   IntentDefinition,
   ParamsOf,
 } from "./core/index.js";
-import type { AppIntentsNativeModule, NativeShortcutPayload } from "./native.js";
+import type {
+  AppIntentsNativeModule,
+  NativeShortcutCapabilityBinding,
+  NativeShortcutPayload,
+} from "./native.js";
 
 type MaybePromise = void | Promise<void>;
 
@@ -346,6 +350,73 @@ export function serializeIntentParams<TIntent extends IntentDefinition<any>>(
   return serialized;
 }
 
+function resolveAndroidCapabilityBindingValue(
+  definition: AnyParameterDefinition,
+  value: unknown,
+): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  switch (definition.kind) {
+    case "date":
+      return value instanceof Date ? value.toISOString() : String(value);
+    case "entity": {
+      try {
+        const displayRepresentation = definition.entity.displayRepresentation(value as never);
+
+        if (displayRepresentation.title) {
+          return displayRepresentation.title;
+        }
+      } catch {}
+
+      try {
+        return definition.entity.identifier(value as never);
+      } catch {}
+
+      return typeof value === "string"
+        ? value
+        : JSON.stringify(serializeEntityValue(definition, value));
+    }
+    case "object":
+      return JSON.stringify(serializeParameterValue(definition, value));
+    default:
+      return String(value);
+  }
+}
+
+function getAndroidCapabilityBindings<TIntent extends IntentDefinition<any>>(
+  intent: TIntent,
+  params: ParamsOf<TIntent>,
+): readonly NativeShortcutCapabilityBinding[] {
+  const capabilityName = intent.android?.appAction?.capability ?? intent.androidBii;
+
+  if (!capabilityName) {
+    return [];
+  }
+
+  const parameterBindings = (
+    Object.entries(intent.params) as [string, AnyParameterDefinition][]
+  ).flatMap(([paramName, definition]) => {
+    if (!definition.androidBiiParam) {
+      return [];
+    }
+
+    const value = resolveAndroidCapabilityBindingValue(
+      definition,
+      params[paramName as keyof ParamsOf<TIntent>],
+    );
+
+    if (value === null) {
+      return [];
+    }
+
+    return [{ key: definition.androidBiiParam, value }];
+  });
+
+  return [{ capabilityName, parameterBindings }];
+}
+
 export function deserializeIntentParams<TIntent extends IntentDefinition<any>>(
   intent: TIntent,
   params: Record<string, unknown>,
@@ -595,12 +666,14 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
 
     async donate(intent, params) {
       const serializedParams = serializeIntentParams(intent, params);
+      const capabilityBindings = getAndroidCapabilityBindings(intent, params);
 
       await nativeModule.donate(
         intent.id,
         resolveLocalizedText(intent.title, intent.id),
         buildIntentUrl(options.scheme, intent, params),
         JSON.stringify(serializedParams),
+        capabilityBindings,
       );
     },
 
@@ -658,6 +731,7 @@ export function createAppIntentsRuntime<const TIntents extends IntentTuple>(
     async updateDynamicShortcuts(shortcuts) {
       const payloads: NativeShortcutPayload[] = shortcuts.map((shortcut) => {
         const payload: NativeShortcutPayload = {
+          capabilityBindings: getAndroidCapabilityBindings(shortcut.intent, shortcut.params),
           id: shortcut.id ?? shortcut.intent.id,
           title:
             shortcut.shortTitle ?? resolveLocalizedText(shortcut.intent.title, shortcut.intent.id),

@@ -1,7 +1,11 @@
+import { ANDROID_APP_ACTION_CATALOG } from "./android-app-actions.js";
 import type { EntityDefinition, EntityDisplayRepresentation, EntityShape } from "./entity.js";
 import type { AnyParameterDefinition, LocalizedText, ObjectParameterDefinition } from "./schema.js";
 import type {
+  AndroidAppActionFulfillment,
+  AndroidAppActionInventoryStrategy,
   AppShortcutSurfaceOptions,
+  IOSAppIntentResponseOptions,
   IntentBehavior,
   IntentDefinition,
   IntentSurfaces,
@@ -68,10 +72,11 @@ export interface NormalizedIntentMetadata<
   TIntent extends IntentDefinition<any> = IntentDefinition<any>,
 > {
   appShortcut: NormalizedAppShortcutMetadata;
-  androidBii?: string;
+  android?: NormalizedAndroidIntentMetadata;
   behavior: Required<IntentBehavior>;
   description?: string;
   id: string;
+  ios?: NormalizedIOSIntentMetadata;
   intent: TIntent;
   params: readonly NormalizedParameterMetadata[];
   phrases: readonly NormalizedPhraseMetadata[];
@@ -89,6 +94,28 @@ export interface NormalizedIntentSurfaces {
 export interface NormalizedAppShortcutMetadata {
   iconAndroidResourceName?: string;
   iconSystemName?: string;
+}
+
+export interface NormalizedAndroidAppActionMetadata {
+  capabilityName: string;
+  fulfillment: AndroidAppActionFulfillment;
+  inventoryStrategy: AndroidAppActionInventoryStrategy;
+}
+
+export interface NormalizedAndroidIntentMetadata {
+  appAction?: NormalizedAndroidAppActionMetadata;
+}
+
+export interface NormalizedIOSAppIntentResponseMetadata {
+  dialog?: string;
+}
+
+export interface NormalizedIOSAppIntentMetadata {
+  response?: NormalizedIOSAppIntentResponseMetadata;
+}
+
+export interface NormalizedIOSIntentMetadata {
+  appIntent?: NormalizedIOSAppIntentMetadata;
 }
 
 const ANDROID_SHORTCUT_ICON_RESOURCE_PATTERN = /^@(drawable|mipmap)\/[A-Za-z0-9_]+$/;
@@ -270,6 +297,17 @@ function normalizePhrases(
           intent.id,
           `Phrase "${phrase}" references unknown placeholder "${placeholder}".`,
         );
+        continue;
+      }
+
+      const parameter = intent.params[placeholder];
+
+      if (parameter?.kind === "object") {
+        appendIssue(
+          issues,
+          intent.id,
+          `Phrase "${phrase}" cannot interpolate object parameter "${placeholder}".`,
+        );
       }
     }
 
@@ -326,6 +364,135 @@ function normalizeSurfaces(surfaces: IntentSurfaces | undefined): NormalizedInte
     siri: surfaces?.siri === true,
     spotlight: surfaces?.spotlight === true,
   };
+}
+
+function normalizeAndroidMetadata(
+  intent: IntentDefinition<any>,
+  issues: string[],
+): NormalizedAndroidIntentMetadata | undefined {
+  const appAction = intent.android?.appAction;
+  const capabilityName = appAction?.capability ?? intent.androidBii;
+
+  if (!capabilityName) {
+    if (intent.surfaces?.assistant) {
+      appendIssue(
+        issues,
+        intent.id,
+        "surfaces.assistant no longer enables Android App Actions by itself. Configure android.appAction.",
+      );
+    }
+
+    return undefined;
+  }
+
+  return {
+    appAction: {
+      capabilityName,
+      fulfillment: appAction?.fulfillment ?? "deeplink",
+      inventoryStrategy: appAction?.inventory?.strategy ?? "static",
+    },
+  };
+}
+
+function normalizeIOSResponseMetadata(
+  response: IOSAppIntentResponseOptions | undefined,
+): NormalizedIOSAppIntentResponseMetadata | undefined {
+  const dialog = resolveLocalizedText(response?.dialog);
+
+  if (!dialog) {
+    return undefined;
+  }
+
+  return {
+    dialog,
+  };
+}
+
+function normalizeIOSMetadata(
+  intent: IntentDefinition<any>,
+  issues: string[],
+): NormalizedIOSIntentMetadata | undefined {
+  const appIntent = intent.ios?.appIntent;
+
+  if (!appIntent) {
+    if (intent.surfaces?.siri) {
+      appendIssue(
+        issues,
+        intent.id,
+        "surfaces.siri no longer enables iOS App Intents by itself. Configure ios.appIntent.",
+      );
+    }
+
+    return undefined;
+  }
+
+  const response = normalizeIOSResponseMetadata(appIntent.response);
+
+  if (response?.dialog && intent.behavior?.opensAppToForeground === true) {
+    appendIssue(
+      issues,
+      intent.id,
+      "ios.appIntent.response.dialog cannot be combined with behavior.opensAppToForeground.",
+    );
+  }
+
+  return {
+    appIntent: response ? { response } : {},
+  };
+}
+
+function validateAndroidAppAction(
+  intent: IntentDefinition<any>,
+  params: readonly AnyParameterDefinition[],
+  android: NormalizedAndroidIntentMetadata["appAction"],
+  issues: string[],
+): void {
+  if (!android) {
+    return;
+  }
+
+  if (!android.capabilityName.startsWith("actions.intent.")) {
+    appendIssue(
+      issues,
+      intent.id,
+      `Android App Actions capability "${android.capabilityName}" must start with "actions.intent.".`,
+    );
+    return;
+  }
+
+  const catalogEntry = ANDROID_APP_ACTION_CATALOG[android.capabilityName];
+
+  if (!catalogEntry) {
+    return;
+  }
+
+  const configuredParameterNames = new Set(
+    params.flatMap((parameter) => (parameter.androidBiiParam ? [parameter.androidBiiParam] : [])),
+  );
+  const supportedParameterNames = new Set([
+    ...(catalogEntry.requiredParameterNames ?? []),
+    ...(catalogEntry.optionalParameterNames ?? []),
+  ]);
+
+  for (const parameterName of configuredParameterNames) {
+    if (!supportedParameterNames.has(parameterName)) {
+      appendIssue(
+        issues,
+        intent.id,
+        `Android App Actions capability "${android.capabilityName}" does not support parameter "${parameterName}".`,
+      );
+    }
+  }
+
+  for (const parameterName of catalogEntry.requiredParameterNames ?? []) {
+    if (!configuredParameterNames.has(parameterName)) {
+      appendIssue(
+        issues,
+        intent.id,
+        `Android App Actions capability "${android.capabilityName}" requires parameter "${parameterName}".`,
+      );
+    }
+  }
 }
 
 function normalizeBehavior(behavior: IntentBehavior | undefined): Required<IntentBehavior> {
@@ -530,6 +697,7 @@ function collectReferencedEntitiesFromParameter(
 function validateIntentEntities(
   intent: IntentDefinition<any>,
   surfaces: Required<IntentSurfaces>,
+  android: NormalizedAndroidIntentMetadata | undefined,
   issues: string[],
 ): void {
   const params = Object.values(intent.params) as AnyParameterDefinition[];
@@ -550,9 +718,11 @@ function validateIntentEntities(
     }
   }
 
-  if (!intent.androidBii) {
+  if (!android?.appAction) {
     return;
   }
+
+  validateAndroidAppAction(intent, params, android.appAction, issues);
 
   if (entityParams.length > 1) {
     appendIssue(
@@ -570,7 +740,7 @@ function validateIntentEntities(
       appendIssue(
         issues,
         intent.id,
-        `Parameter "${paramName}" must declare androidBiiParam when androidBii is set.`,
+        `Parameter "${paramName}" must declare androidBiiParam when android.appAction is configured.`,
       );
     }
 
@@ -594,25 +764,36 @@ export function normalizeIntentDefinition<TIntent extends IntentDefinition<any>>
     ([name, definition]) => normalizeParameterMetadata(name, definition),
   );
   const phrases = normalizePhrases(intent, issues);
+  const android = normalizeAndroidMetadata(intent, issues);
+  const ios = normalizeIOSMetadata(intent, issues);
   const surfaces = normalizeSurfaces(intent.surfaces);
+
+  if (android?.appAction) {
+    surfaces.assistant = true;
+  }
+
+  if (ios?.appIntent) {
+    surfaces.siri = true;
+  }
 
   if (surfaces.appShortcut && phrases.length === 0) {
     appendIssue(issues, intent.id, "App Shortcut intents must declare at least one phrase.");
   }
 
-  validateIntentEntities(intent, surfaces, issues);
+  validateIntentEntities(intent, surfaces, android, issues);
 
   if (issues.length > 0) {
     throw new AppIntentsValidationError(issues);
   }
 
-  const normalized: Omit<NormalizedIntentMetadata<TIntent>, "androidBii" | "description"> & {
-    androidBii?: string;
+  const normalized: Omit<NormalizedIntentMetadata<TIntent>, "description"> & {
     description?: string;
   } = {
     appShortcut: normalizeAppShortcutMetadata(intent.surfaces?.appShortcut, intent.id, issues),
+    ...(android ? { android } : {}),
     behavior: normalizeBehavior(intent.behavior),
     id: intent.id,
+    ...(ios ? { ios } : {}),
     intent,
     params,
     phrases,
@@ -620,10 +801,6 @@ export function normalizeIntentDefinition<TIntent extends IntentDefinition<any>>
     title: resolveLocalizedText(intent.title, intent.id) ?? intent.id,
   };
   const description = resolveLocalizedText(intent.description);
-
-  if (intent.androidBii) {
-    normalized.androidBii = intent.androidBii;
-  }
 
   if (description) {
     normalized.description = description;

@@ -12,7 +12,6 @@ export const openOrder = defineIntent({
     }),
   },
   surfaces: {
-    siri: true,
     spotlight: true,
     appShortcut: {
       icon: {
@@ -20,7 +19,13 @@ export const openOrder = defineIntent({
         systemName: "shippingbox",
       },
     },
-    assistant: true,
   },
-  androidBii: "actions.intent.GET_ORDER",
+  android: {
+    appAction: {
+      capability: "actions.intent.GET_ORDER",
+    },
+  },
+  ios: {
+    appIntent: {},
+  },
 });

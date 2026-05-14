@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCallback } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import { defineAppIntentsConfig, generateAppIntents } from "../src/index.js";
+
+const execFile = promisify(execFileCallback);
 
 test("generateAppIntents writes bare RN artifacts from intent definitions", async () => {
   const repoRoot = resolve(import.meta.dirname, "../../..");
@@ -59,7 +63,7 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
         "  surfaces: {",
         '    appShortcut: { icon: { androidResourceName: "@mipmap/ic_launcher_round", systemName: "shippingbox" } },',
         "  },",
-        '  androidBii: "actions.intent.GET_ORDER",',
+        '  android: { appAction: { capability: "actions.intent.GET_ORDER" } },',
         "});",
         "",
         "export const openSavedOrder = defineIntent({",
@@ -73,7 +77,23 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
         "  surfaces: {",
         "    appShortcut: true,",
         "  },",
-        '  androidBii: "actions.intent.GET_ORDER",',
+        '  android: { appAction: { capability: "actions.intent.GET_ORDER" } },',
+        "});",
+        "",
+        "export const checkDelivery = defineIntent({",
+        '  id: "checkDelivery",',
+        '  title: "Check Delivery",',
+        "  params: {",
+        "    deliveryWindow: p.object({",
+        '      startDate: p.date({ title: "Start Date" }),',
+        "      destination: p.object({",
+        '        city: p.string({ optional: true, title: "City" }),',
+        "      }),",
+        "    }),",
+        "  },",
+        "  ios: {",
+        '    appIntent: { response: { dialog: "Checking delivery window." } },',
+        "  },",
         "});",
         "",
       ].join("\n"),
@@ -113,18 +133,37 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
     );
 
     assert.equal(result.artifacts.length, 4);
+    assert.deepEqual(result.diagnostics, [
+      "Android App Actions configured: openOrder: actions.intent.GET_ORDER (deeplink, static inventory); openSavedOrder: actions.intent.GET_ORDER (deeplink, static inventory)",
+      "Verified App Links, Play Console setup, and any Assistant review steps remain manual Android setup tasks.",
+      "iOS App Intents configured: checkDelivery",
+      "Generated Siri/App Intent dialogs are static only in the current iOS slice; dynamic native dialog flows remain manual work.",
+    ]);
     assert.match(generatedSwift, /struct OrderAppEntity: AppEntity/);
     assert.match(generatedSwift, /struct OrderEntityQuery: EntityQuery, EntityStringQuery/);
     assert.match(generatedSwift, /struct OpenOrderIntent: AppIntent/);
     assert.match(generatedSwift, /struct OpenSavedOrderIntent: AppIntent/);
+    assert.match(generatedSwift, /struct CheckDeliveryIntent: AppIntent/);
     assert.match(generatedSwift, /struct GeneratedAppShortcuts: AppShortcutsProvider/);
     assert.match(generatedSwift, /enqueueReactNativeAppIntentURL/);
+    assert.match(generatedSwift, /static var parameterSummary: some ParameterSummary/);
     assert.match(
       generatedSwift,
       /private let reactNativeAppIntentsAppGroupIdentifier: String\? = "group\.com\.crockalet\.appintents\.example"/,
     );
     assert.match(generatedSwift, /defaults\.synchronize\(\)/);
+    assert.match(
+      generatedSwift,
+      /private func reactNativeAppIntentsJSONString\(_ payload: \[String: Any\]\) throws -> String/,
+    );
     assert.match(generatedSwift, /Open \\\(\\\.\$order\) in \\\(.applicationName\)/);
+    assert.match(generatedSwift, /var deliveryWindow__startDate: Date/);
+    assert.match(generatedSwift, /var deliveryWindow__destination__city: String\?/);
+    assert.match(generatedSwift, /var deliveryWindowPayload: \[String: Any\] = \[:\]/);
+    assert.match(
+      generatedSwift,
+      /return \.result\(dialog: IntentDialog\("Checking delivery window\."\)\)/,
+    );
     assert.match(generatedSwift, /systemImageName: "shippingbox"/);
     assert.match(generatedSwift, /systemImageName: "square\.grid\.2x2"/);
     assert.match(generatedShortcuts, /android:shortcutId="openOrder"/);
@@ -148,13 +187,36 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
       /<string name="react_native_app_intents_open_saved_order_order_1_short_label">Order #1234<\/string>/,
     );
     assert.match(generatedTypes, /GeneratedAppIntentEvent/);
-    assert.match(generatedTypes, /openSavedOrder: ParamsOf<typeof Intent1>/);
+    assert.match(generatedTypes, /checkDelivery: ParamsOf<typeof Intent0>/);
+    assert.match(generatedTypes, /openSavedOrder: ParamsOf<typeof Intent2>/);
     assert.match(generatedManifest, /android\.app\.shortcuts/);
     assert.match(generatedManifest, /android:scheme="example"/);
 
     const checkResult = await generateAppIntents(config, { check: true, cwd });
 
+    assert.ok(
+      checkResult.diagnostics?.some((diagnostic) =>
+        diagnostic.includes("Android App Actions configured: openOrder"),
+      ),
+    );
+    assert.ok(
+      checkResult.diagnostics?.some((diagnostic) =>
+        diagnostic.includes("iOS App Intents configured: checkDelivery"),
+      ),
+    );
     assert.equal(checkResult.message, "Generated artifacts are up to date.");
+
+    if (process.platform === "darwin") {
+      await execFile("xcrun", [
+        "--sdk",
+        "iphonesimulator",
+        "swiftc",
+        "-typecheck",
+        "-target",
+        "arm64-apple-ios16.0-simulator",
+        join(cwd, "ios/AppIntents/GeneratedAppIntents.swift"),
+      ]);
+    }
   } finally {
     await rm(cwd, { force: true, recursive: true });
   }

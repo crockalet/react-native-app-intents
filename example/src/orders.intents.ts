@@ -47,7 +47,6 @@ export const openOrder = defineIntent({
     }),
   },
   surfaces: {
-    siri: true,
     spotlight: true,
     appShortcut: {
       icon: {
@@ -55,9 +54,15 @@ export const openOrder = defineIntent({
         systemName: "shippingbox",
       },
     },
-    assistant: true,
   },
-  androidBii: "actions.intent.GET_ORDER",
+  android: {
+    appAction: {
+      capability: "actions.intent.GET_ORDER",
+    },
+  },
+  ios: {
+    appIntent: {},
+  },
   behavior: { opensAppToForeground: true },
 });
 
@@ -75,11 +80,16 @@ export const openSavedOrder = defineIntent({
     }),
   },
   surfaces: {
-    siri: true,
     spotlight: true,
     appShortcut: true,
-    assistant: true,
   },
-  androidBii: "actions.intent.GET_ORDER",
+  android: {
+    appAction: {
+      capability: "actions.intent.GET_ORDER",
+    },
+  },
+  ios: {
+    appIntent: {},
+  },
   behavior: { opensAppToForeground: true },
 });

@@ -43,10 +43,13 @@ export const openOrder = defineIntent({
   title: "Open Order",
   phrases: ["Open order ${orderNumber} in ${.applicationName}"],
   params: {
-    orderNumber: p.string({ title: "Order number", default: "1234" }),
+    orderNumber: p.string({
+      androidBiiParam: "order",
+      title: "Order number",
+      default: "1234",
+    }),
   },
   surfaces: {
-    siri: true,
     spotlight: true,
     appShortcut: {
       icon: {
@@ -54,7 +57,14 @@ export const openOrder = defineIntent({
         systemName: "shippingbox",
       },
     },
-    assistant: true,
+  },
+  android: {
+    appAction: {
+      capability: "actions.intent.GET_ORDER",
+    },
+  },
+  ios: {
+    appIntent: {},
   },
 });
 ```
@@ -209,3 +219,28 @@ async function logout() {
 `surfaces.appShortcut` still accepts `true`, but you can also pass an object to set
 an iOS SF Symbol (`systemName`) and/or an Android shortcut resource reference
 (`androidResourceName`, such as `@mipmap/ic_launcher_round`).
+
+## Android App Actions contract
+
+- Use `android.appAction` to opt an intent into Android App Actions.
+- Android App Actions are the primary Android target; Google Assistant voice support is best-effort.
+- `surfaces.assistant` and top-level `androidBii` are legacy shims and should be avoided in new intent definitions.
+
+## iOS Siri / App Intents contract
+
+- Use `ios.appIntent` to opt an intent into native Siri/App Intents generation.
+- `surfaces.siri` no longer enables App Intents by itself; keep using `surfaces.appShortcut` and `surfaces.spotlight` for those separate surfaces.
+- Static `ios.appIntent.response.dialog` is supported only for background intents; it cannot be combined with `behavior.opensAppToForeground`.
+- `object` params are flattened into Swift leaf parameters for App Intents, but phrases cannot interpolate the object parameter itself.
+
+## iOS Siri / App Intents support matrix
+
+| Scenario                                                 | Status            | Coverage                                     |
+| -------------------------------------------------------- | ----------------- | -------------------------------------------- |
+| `ios.appIntent` foreground URL handoff                   | Supported         | Codegen snapshot, runtime tests, example app |
+| Static `ios.appIntent.response.dialog`                   | Supported         | Core validation, Swift typecheck, snapshot   |
+| Nested `object` params in generated App Intents          | Supported         | Core validation, Swift typecheck, snapshot   |
+| `surfaces.siri` without `ios.appIntent`                  | Unsupported       | Core validation                              |
+| Object-param placeholders inside `phrases`               | Unsupported       | Core validation                              |
+| Custom bundled image assets in generated App Shortcuts   | Unsupported       | Documentation only                           |
+| Dynamic Siri dialog sourced from JS/native perform logic | Not yet supported | Explicit non-goal for current slice          |

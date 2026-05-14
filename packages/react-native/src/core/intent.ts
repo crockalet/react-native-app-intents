@@ -17,11 +17,39 @@ export interface IntentSurfaces {
   siri?: boolean;
   spotlight?: boolean;
   appShortcut?: boolean | AppShortcutSurfaceOptions;
+  /** @deprecated Use android.appAction instead. */
   assistant?: boolean;
 }
 
 export interface IntentBehavior {
   opensAppToForeground?: boolean;
+}
+
+export interface IOSAppIntentResponseOptions {
+  dialog?: LocalizedText;
+}
+
+export interface IOSAppIntentOptions {
+  response?: IOSAppIntentResponseOptions;
+}
+
+export interface IntentIOSOptions {
+  appIntent?: IOSAppIntentOptions;
+}
+
+export type AndroidAppActionFulfillment = "deeplink";
+export type AndroidAppActionInventoryStrategy = "static" | "dynamic";
+
+export interface AndroidAppActionOptions {
+  capability: string;
+  fulfillment?: AndroidAppActionFulfillment;
+  inventory?: {
+    strategy?: AndroidAppActionInventoryStrategy;
+  };
+}
+
+export interface IntentAndroidOptions {
+  appAction?: AndroidAppActionOptions;
 }
 
 export interface IntentDefinition<
@@ -34,6 +62,9 @@ export interface IntentDefinition<
   phrases?: readonly string[] | Partial<Record<string, readonly string[]>>;
   params: TParams;
   surfaces?: IntentSurfaces;
+  android?: IntentAndroidOptions;
+  ios?: IntentIOSOptions;
+  /** @deprecated Use android.appAction.capability instead. */
   androidBii?: string;
   behavior?: IntentBehavior;
 }

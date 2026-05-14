@@ -70,7 +70,14 @@ test("runtime parses initial urls and emits typed handlers", async () => {
     id: "openOrder",
     title: "Open Order",
     params: {
-      orderNumber: p.string(),
+      orderNumber: p.string({
+        androidBiiParam: "order",
+      }),
+    },
+    android: {
+      appAction: {
+        capability: "actions.intent.GET_ORDER",
+      },
     },
   });
   const linking = createLinkingAdapter(
@@ -87,8 +94,10 @@ test("runtime parses initial urls and emits typed handlers", async () => {
       async clearDonations() {
         clearedDonations.push("clear");
       },
-      async donate(intentId, title, url, payload) {
-        donated.push(`${intentId}:${title}:${url}:${payload}`);
+      async donate(intentId, title, url, payload, capabilityBindings) {
+        donated.push(
+          `${intentId}:${title}:${url}:${payload}:${JSON.stringify(capabilityBindings ?? [])}`,
+        );
       },
       async updateDynamicShortcuts(shortcuts) {
         shortcutUpdates.push(shortcuts);
@@ -131,7 +140,7 @@ test("runtime parses initial urls and emits typed handlers", async () => {
   });
   assert.equal(
     donated[0],
-    'openOrder:Open Order:example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%225678%22%7D:{"orderNumber":"5678"}',
+    'openOrder:Open Order:example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%225678%22%7D:{"orderNumber":"5678"}:[{"capabilityName":"actions.intent.GET_ORDER","parameterBindings":[{"key":"order","value":"5678"}]}]',
   );
   assert.deepEqual(clearedDonations, ["clear"]);
   assert.deepEqual(shortcutUpdates[0], [
@@ -142,6 +151,17 @@ test("runtime parses initial urls and emits typed handlers", async () => {
         iosTemplateImageName: "burger",
         systemName: "shippingbox",
       },
+      capabilityBindings: [
+        {
+          capabilityName: "actions.intent.GET_ORDER",
+          parameterBindings: [
+            {
+              key: "order",
+              value: "5678",
+            },
+          ],
+        },
+      ],
       title: "Open Order 1234",
       url: "example://app-intents/openOrder?payload=%7B%22orderNumber%22%3A%225678%22%7D",
     },
@@ -307,6 +327,48 @@ test("runtime serializes and parses entity params", async () => {
   assert.deepEqual(parsed, {
     id: "openSavedOrder",
     intent: openSavedOrder,
+    params,
+    url,
+  });
+});
+
+test("runtime serializes and parses nested object params", () => {
+  const checkDelivery = defineIntent({
+    id: "checkDelivery",
+    title: "Check Delivery",
+    params: {
+      deliveryWindow: p.object({
+        startDate: p.date(),
+        destination: p.object({
+          city: p.string({ optional: true }),
+        }),
+      }),
+    },
+  });
+  const params = {
+    deliveryWindow: {
+      startDate: new Date("2024-01-02T03:04:05.000Z"),
+      destination: {
+        city: "Berlin",
+      },
+    },
+  };
+  const url = buildIntentUrl("example", checkDelivery, params);
+  const parsed = parseIntentUrl(
+    {
+      scheme: "example",
+      intentsById: new Map([[checkDelivery.id, checkDelivery]]),
+    },
+    url,
+  );
+
+  assert.equal(
+    url,
+    "example://app-intents/checkDelivery?payload=%7B%22deliveryWindow%22%3A%7B%22startDate%22%3A%222024-01-02T03%3A04%3A05.000Z%22%2C%22destination%22%3A%7B%22city%22%3A%22Berlin%22%7D%7D%7D",
+  );
+  assert.deepEqual(parsed, {
+    id: "checkDelivery",
+    intent: checkDelivery,
     params,
     url,
   });

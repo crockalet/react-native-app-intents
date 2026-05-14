@@ -43,10 +43,13 @@ export const openOrder = defineIntent({
   title: "Open Order",
   phrases: ["Open order ${orderNumber} in ${.applicationName}"],
   params: {
-    orderNumber: p.string({ title: "Order number", default: "1234" }),
+    orderNumber: p.string({
+      androidBiiParam: "order",
+      title: "Order number",
+      default: "1234",
+    }),
   },
   surfaces: {
-    siri: true,
     spotlight: true,
     appShortcut: {
       icon: {
@@ -54,9 +57,15 @@ export const openOrder = defineIntent({
         systemName: "shippingbox",
       },
     },
-    assistant: true,
   },
-  androidBii: "actions.intent.GET_ORDER",
+  android: {
+    appAction: {
+      capability: "actions.intent.GET_ORDER",
+    },
+  },
+  ios: {
+    appIntent: {},
+  },
 });
 ```
 
@@ -123,6 +132,48 @@ async function logout() {
 `surfaces.appShortcut` still accepts `true`, but you can also pass an object to set
 an iOS SF Symbol (`systemName`) and/or an Android shortcut resource reference
 (`androidResourceName`, such as `@mipmap/ic_launcher_round`).
+
+## Android App Actions contract
+
+- Use `android.appAction` to opt an intent into Android App Actions.
+- Android App Actions are the primary Android target; Google Assistant voice support is best-effort.
+- `surfaces.assistant` and top-level `androidBii` are legacy shims and should be avoided in new intent definitions.
+
+## Android App Actions support matrix
+
+| Scenario                                                    | Status                | Coverage                                        |
+| ----------------------------------------------------------- | --------------------- | ----------------------------------------------- |
+| `actions.intent.GET_ORDER` scalar slot binding              | Supported             | Core validation, codegen snapshot, runtime test |
+| `actions.intent.GET_ORDER` entity-backed shortcut inventory | Supported             | Core validation, codegen snapshot, example app  |
+| Capability-bound Android donations and dynamic shortcuts    | Supported             | Runtime test, Android native module wiring      |
+| Legacy `surfaces.assistant` / top-level `androidBii` usage  | Compatibility only    | Core validation                                 |
+| Google Assistant voice triggering                           | Best effort           | Manual verification only                        |
+| Verified App Links / Play Console review steps              | Manual setup required | Codegen diagnostics                             |
+
+For an opt-in `adb` smoke test against the bare Android example app, run:
+
+```bash
+RN_APP_INTENTS_ANDROID_E2E=1 bun test packages/react-native/test/android-app-actions.e2e.test.ts
+```
+
+## iOS Siri / App Intents contract
+
+- Use `ios.appIntent` to opt an intent into native Siri/App Intents generation.
+- `surfaces.siri` no longer enables App Intents by itself; keep using `surfaces.appShortcut` and `surfaces.spotlight` for those separate surfaces.
+- Static `ios.appIntent.response.dialog` is supported only for background intents; it cannot be combined with `behavior.opensAppToForeground`.
+- `object` params are flattened into Swift leaf parameters for App Intents, but phrases cannot interpolate the object parameter itself.
+
+## iOS Siri / App Intents support matrix
+
+| Scenario                                                 | Status            | Coverage                                     |
+| -------------------------------------------------------- | ----------------- | -------------------------------------------- |
+| `ios.appIntent` foreground URL handoff                   | Supported         | Codegen snapshot, runtime tests, example app |
+| Static `ios.appIntent.response.dialog`                   | Supported         | Core validation, Swift typecheck, snapshot   |
+| Nested `object` params in generated App Intents          | Supported         | Core validation, Swift typecheck, snapshot   |
+| `surfaces.siri` without `ios.appIntent`                  | Unsupported       | Core validation                              |
+| Object-param placeholders inside `phrases`               | Unsupported       | Core validation                              |
+| Custom bundled image assets in generated App Shortcuts   | Unsupported       | Documentation only                           |
+| Dynamic Siri dialog sourced from JS/native perform logic | Not yet supported | Explicit non-goal for current slice          |
 
 ## Expo setup
 
@@ -213,8 +264,10 @@ only; Expo-bundled PNG assets are not used there.
 
 - Single scoped npm package: runtime, authoring API, codegen, CLI, and Expo plugin.
 - Type-safe `defineIntent`, `defineEntity`, and `p.*` parameter builders.
-- iOS Swift App Intents/App Shortcuts generation.
-- Android shortcuts XML, strings XML, and manifest patching.
+- First-class `android.appAction` authoring plus Android shortcuts XML, strings XML, and manifest patching.
+- First-class `ios.appIntent` authoring plus Swift App Intents/App Shortcuts generation.
+- Nested object-parameter support in generated iOS App Intents, including generated parameter summaries.
+- Static iOS App Intent dialog responses via `ios.appIntent.response.dialog`.
 - Generated TypeScript event types.
 - Runtime helpers for initial intents, warm intent events, intent URL parsing/building, donations,
   donation clearing, and dynamic shortcuts.
@@ -223,7 +276,8 @@ only; Expo-bundled PNG assets are not used there.
 
 ## Planned features
 
-- Better Android Assistant/App Actions coverage.
+- Expanded Android App Actions coverage.
+- Dynamic Siri/App Intent dialog flows beyond the current static-response slice.
 - Richer icons and metadata for generated shortcuts.
 - More Expo and bare-app setup automation.
 - Expanded examples and end-to-end app templates.

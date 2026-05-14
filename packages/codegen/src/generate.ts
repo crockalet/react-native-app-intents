@@ -28,6 +28,7 @@ export interface GenerateAppIntentsOptions {
 export interface GenerateAppIntentsResult {
   artifacts: GeneratedArtifact[];
   changed: boolean;
+  diagnostics?: readonly string[];
   message: string;
 }
 
@@ -41,6 +42,7 @@ interface LoadedIntentSource {
 interface RenderedArtifacts {
   androidManifest?: string;
   artifacts: Array<GeneratedArtifact & { content: string }>;
+  diagnostics: string[];
 }
 
 interface AndroidShortcutArtifact {
@@ -67,6 +69,15 @@ interface AndroidShortcutParameterBinding {
 interface AndroidCapabilityArtifact {
   name: string;
   parameterNames: readonly string[];
+}
+
+type SwiftLeafParameterDefinition = Exclude<AnyParameterDefinition, { kind: "object" }>;
+
+interface SwiftRenderableParameter {
+  declarationName: string;
+  definition: SwiftLeafParameterDefinition;
+  optional: boolean;
+  path: readonly string[];
 }
 
 const IOS_PENDING_URLS_DEFAULTS_KEY = "ReactNativeAppIntentsPendingURLs";
@@ -314,6 +325,10 @@ function toAndroidResourceName(value: string): string {
     .toLowerCase();
 }
 
+function getAndroidAppActionCapabilityName(intent: NormalizedIntentMetadata): string | null {
+  return intent.android?.appAction?.capabilityName ?? null;
+}
+
 function getAndroidShortcutArtifact(
   intent: NormalizedIntentMetadata,
   entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
@@ -336,7 +351,7 @@ function getAndroidShortcutArtifact(
     ...(intent.appShortcut.iconAndroidResourceName
       ? { iconResourceName: intent.appShortcut.iconAndroidResourceName }
       : {}),
-    ...(intent.androidBii
+    ...(getAndroidAppActionCapabilityName(intent)
       ? {
           capabilityBindings: getAndroidCapabilityBindings(intent, defaultParams, entitiesById),
         }
@@ -421,7 +436,9 @@ function getAndroidCapabilityBindings(
   params: Record<string, unknown>,
   entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
 ): readonly AndroidShortcutCapabilityBinding[] {
-  if (!intent.androidBii) {
+  const capabilityName = getAndroidAppActionCapabilityName(intent);
+
+  if (!capabilityName) {
     return [];
   }
 
@@ -443,7 +460,7 @@ function getAndroidCapabilityBindings(
     return [];
   }
 
-  return [{ capabilityName: intent.androidBii, parameterBindings }];
+  return [{ capabilityName, parameterBindings }];
 }
 
 function getAndroidCapabilityArtifacts(
@@ -452,11 +469,13 @@ function getAndroidCapabilityArtifacts(
   const parameterNamesByCapability = new Map<string, Set<string>>();
 
   for (const intent of intentMetadata) {
-    if (!intent.androidBii) {
+    const capabilityName = getAndroidAppActionCapabilityName(intent);
+
+    if (!capabilityName) {
       continue;
     }
 
-    const parameterNames = parameterNamesByCapability.get(intent.androidBii) ?? new Set<string>();
+    const parameterNames = parameterNamesByCapability.get(capabilityName) ?? new Set<string>();
 
     for (const parameter of intent.params) {
       if (parameter.androidBiiParam) {
@@ -464,7 +483,7 @@ function getAndroidCapabilityArtifacts(
       }
     }
 
-    parameterNamesByCapability.set(intent.androidBii, parameterNames);
+    parameterNamesByCapability.set(capabilityName, parameterNames);
   }
 
   return [...parameterNamesByCapability.entries()].map(([name, parameterNames]) => ({
@@ -481,7 +500,7 @@ function getAndroidCapabilityInventoryShortcuts(
   const entitiesById = new Map(entityMetadata.map((entity) => [entity.id, entity]));
 
   return intentMetadata.flatMap((intent) => {
-    if (!intent.androidBii) {
+    if (!getAndroidAppActionCapabilityName(intent)) {
       return [];
     }
 
@@ -621,11 +640,64 @@ function getSwiftType(
   }
 }
 
-function renderSwiftParameter(
-  name: string,
-  definition: AnyParameterDefinition,
+function getSwiftParameterDeclarationName(path: readonly string[]): string {
+  return path.join("__");
+}
+
+function collectSwiftRenderableParameters(
+  definitions: readonly [string, AnyParameterDefinition][],
+  usedNames: Set<string>,
+  pathPrefix: readonly string[] = [],
+  parentOptional = false,
+): SwiftRenderableParameter[] {
+  return definitions.flatMap(([name, definition]) => {
+    const path = [...pathPrefix, name];
+    const optional = parentOptional || definition.optional === true;
+
+    if (definition.kind === "object") {
+      return collectSwiftRenderableParameters(
+        Object.entries(definition.fields) as [string, AnyParameterDefinition][],
+        usedNames,
+        path,
+        optional,
+      );
+    }
+
+    const declarationName = getSwiftParameterDeclarationName(path);
+
+    if (usedNames.has(declarationName)) {
+      throw new Error(
+        `iOS App Intent parameter flattening produced duplicate Swift parameter name "${declarationName}".`,
+      );
+    }
+
+    usedNames.add(declarationName);
+
+    return [
+      {
+        declarationName,
+        definition,
+        optional,
+        path,
+      },
+    ];
+  });
+}
+
+function getSwiftParameterType(
+  parameter: SwiftRenderableParameter,
   entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
 ): string {
+  const type = getSwiftType(parameter.definition, entitiesById);
+  return parameter.optional ? `${type}?` : type;
+}
+
+function renderSwiftParameter(
+  parameter: SwiftRenderableParameter,
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
+): string {
+  const name = parameter.path.at(-1) ?? parameter.declarationName;
+  const definition = parameter.definition;
   const lines = [
     `  @Parameter(`,
     `    title: "${escapeSwiftString(resolveLocalizedText(definition.title, name) ?? name)}",`,
@@ -637,7 +709,9 @@ function renderSwiftParameter(
   }
 
   lines.push("  )");
-  lines.push(`  var ${name}: ${getSwiftType(definition, entitiesById)}`);
+  lines.push(
+    `  var ${parameter.declarationName}: ${getSwiftParameterType(parameter, entitiesById)}`,
+  );
 
   return lines.join("\n");
 }
@@ -760,19 +834,116 @@ function renderSwiftEntity(entity: NormalizedEntityMetadata): string {
   ].join("\n");
 }
 
-function renderSwiftPayloadValueExpression(
-  parameterName: string,
-  definition: AnyParameterDefinition,
+function renderSwiftJSONValueExpression(
+  valueExpression: string,
+  definition: SwiftLeafParameterDefinition,
   entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
 ): string {
   switch (definition.kind) {
     case "entity": {
       const entity = getNormalizedEntityMetadata(definition.entity.id, entitiesById);
-      return `try ${getSwiftEntityCatalogTypeName(entity.id)}.jsonValue(for: ${parameterName}.id)`;
+      return `try reactNativeAppIntentsJSONObject(fromJSONString: try ${getSwiftEntityCatalogTypeName(entity.id)}.jsonValue(for: ${valueExpression}.id))`;
     }
     default:
-      return `try encodeReactNativeAppIntentsJSONValue(${parameterName})`;
+      return `try reactNativeAppIntentsJSONObject(${valueExpression})`;
   }
+}
+
+function getSwiftParameterPathKey(path: readonly string[]): string {
+  return path.join(".");
+}
+
+function renderSwiftPayloadAssignmentLines(
+  containerName: string,
+  key: string,
+  definition: AnyParameterDefinition,
+  flattenedParametersByPath: ReadonlyMap<string, SwiftRenderableParameter>,
+  entitiesById: ReadonlyMap<string, NormalizedEntityMetadata>,
+  indent = "    ",
+  pathPrefix: readonly string[] = [],
+  parentOptional = false,
+): string[] {
+  const path = [...pathPrefix, key];
+  const optional = parentOptional || definition.optional === true;
+
+  if (definition.kind === "object") {
+    const objectVariableName = `${getSwiftParameterDeclarationName(path)}Payload`;
+    const lines = [`${indent}var ${objectVariableName}: [String: Any] = [:]`];
+
+    for (const [fieldName, fieldDefinition] of Object.entries(definition.fields) as [
+      string,
+      AnyParameterDefinition,
+    ][]) {
+      lines.push(
+        ...renderSwiftPayloadAssignmentLines(
+          objectVariableName,
+          fieldName,
+          fieldDefinition,
+          flattenedParametersByPath,
+          entitiesById,
+          indent,
+          path,
+          optional,
+        ),
+      );
+    }
+
+    if (optional) {
+      lines.push(
+        `${indent}if !${objectVariableName}.isEmpty {`,
+        `${indent}  ${containerName}["${escapeSwiftString(key)}"] = ${objectVariableName}`,
+        `${indent}}`,
+      );
+    } else {
+      lines.push(`${indent}${containerName}["${escapeSwiftString(key)}"] = ${objectVariableName}`);
+    }
+
+    return lines;
+  }
+
+  const parameter = flattenedParametersByPath.get(getSwiftParameterPathKey(path));
+
+  if (!parameter) {
+    throw new Error(`Missing flattened Swift parameter for "${path.join(".")}".`);
+  }
+
+  const valueExpression = parameter.optional
+    ? `${parameter.declarationName}Value`
+    : parameter.declarationName;
+  const assignmentExpression = `${containerName}["${escapeSwiftString(key)}"] = ${renderSwiftJSONValueExpression(
+    valueExpression,
+    parameter.definition,
+    entitiesById,
+  )}`;
+
+  if (!parameter.optional) {
+    return [`${indent}${assignmentExpression}`];
+  }
+
+  return [
+    `${indent}if let ${parameter.declarationName}Value = ${parameter.declarationName} {`,
+    `${indent}  ${assignmentExpression}`,
+    `${indent}}`,
+  ];
+}
+
+function renderSwiftParameterSummary(
+  intent: NormalizedIntentMetadata,
+  parameters: readonly SwiftRenderableParameter[],
+): string[] {
+  if (parameters.length === 0) {
+    return [];
+  }
+
+  const placeholders = parameters.map((parameter) => `\\(\\.$${parameter.declarationName})`);
+  const summaryText = escapeSwiftString(intent.title);
+
+  return [
+    "  static var parameterSummary: some ParameterSummary {",
+    `    Summary("${summaryText}${placeholders.length > 0 ? ` ${placeholders.join(" ")}` : ""}")`,
+    "  }",
+    "",
+  ];
 }
 
 function renderSwift(
@@ -813,10 +984,20 @@ function renderSwift(
     "  defaults.synchronize()",
     "}",
     "",
-    "private func encodeReactNativeAppIntentsJSONValue<T: Encodable>(_ value: T) throws -> String {",
+    "private func reactNativeAppIntentsJSONObject<T: Encodable>(_ value: T) throws -> Any {",
     "  let encoder = JSONEncoder()",
     "  encoder.dateEncodingStrategy = .iso8601",
     "  let data = try encoder.encode(value)",
+    "  return try JSONSerialization.jsonObject(with: data)",
+    "}",
+    "",
+    "private func reactNativeAppIntentsJSONObject(fromJSONString json: String) throws -> Any {",
+    "  let data = Data(json.utf8)",
+    "  return try JSONSerialization.jsonObject(with: data)",
+    "}",
+    "",
+    "private func reactNativeAppIntentsJSONString(_ payload: [String: Any]) throws -> String {",
+    "  let data = try JSONSerialization.data(withJSONObject: payload)",
     "  return String(decoding: data, as: UTF8.self)",
     "}",
     "",
@@ -828,24 +1009,37 @@ function renderSwift(
 
   for (const intent of intentMetadata) {
     const typeName = `${toPascalCase(intent.id)}Intent`;
-    const parameters = (
-      Object.entries(intent.intent.params) as [string, AnyParameterDefinition][]
-    ).map(([name, definition]) => renderSwiftParameter(name, definition, entitiesById));
-    const payloadEntries = (
-      Object.entries(intent.intent.params) as [string, AnyParameterDefinition][]
-    ).map(
-      ([name, definition]) =>
-        `      "\\"${escapeSwiftString(name)}\\": \\(${renderSwiftPayloadValueExpression(name, definition, entitiesById)})",`,
+    const renderableParameters = collectSwiftRenderableParameters(
+      Object.entries(intent.intent.params) as [string, AnyParameterDefinition][],
+      new Set<string>(),
     );
-    const payloadStringLines =
-      payloadEntries.length === 0
+    const parameters = renderableParameters.map((parameter) =>
+      renderSwiftParameter(parameter, entitiesById),
+    );
+    const flattenedParametersByPath = new Map(
+      renderableParameters.map((parameter) => [
+        getSwiftParameterPathKey(parameter.path),
+        parameter,
+      ]),
+    );
+    const payloadBuilderLines =
+      Object.keys(intent.intent.params).length === 0
         ? ['    let payloadString = "{}"']
         : [
-            "    let payloadEntries = [",
-            ...payloadEntries,
-            "    ]",
-            '    let payloadString = "{\\(payloadEntries.joined(separator: ","))}"',
+            "    var payload: [String: Any] = [:]",
+            ...(Object.entries(intent.intent.params) as [string, AnyParameterDefinition][]).flatMap(
+              ([name, definition]) =>
+                renderSwiftPayloadAssignmentLines(
+                  "payload",
+                  name,
+                  definition,
+                  flattenedParametersByPath,
+                  entitiesById,
+                ),
+            ),
+            "    let payloadString = try reactNativeAppIntentsJSONString(payload)",
           ];
+    const dialog = intent.ios?.appIntent?.response?.dialog;
 
     declarations.push(
       "@available(iOS 16.0, *)",
@@ -856,9 +1050,10 @@ function renderSwift(
         : '  static let description = IntentDescription("")',
       `  static let openAppWhenRun = ${intent.behavior.opensAppToForeground ? "true" : "false"}`,
       "",
+      ...renderSwiftParameterSummary(intent, renderableParameters),
       ...(parameters.length === 0 ? [] : parameters.flatMap((parameter) => [parameter, ""])),
-      "  func perform() async throws -> some IntentResult {",
-      ...payloadStringLines,
+      `  func perform() async throws -> some ${dialog ? "IntentResult & ProvidesDialog" : "IntentResult"} {`,
+      ...payloadBuilderLines,
       "    var components = URLComponents()",
       `    components.scheme = "${escapeSwiftString(scheme)}"`,
       '    components.host = "app-intents"',
@@ -874,7 +1069,9 @@ function renderSwift(
       "    }",
       "",
       "    enqueueReactNativeAppIntentURL(url)",
-      "    return .result()",
+      dialog
+        ? `    return .result(dialog: IntentDialog("${escapeSwiftString(dialog)}"))`
+        : "    return .result()",
       "  }",
       "}",
       "",
@@ -979,6 +1176,57 @@ function renderAndroidShortcutStrings(
     "</resources>",
     "",
   ].join("\n");
+}
+
+function getAndroidDiagnostics(
+  intentMetadata: readonly NormalizedIntentMetadata[],
+  config: AppIntentsConfig,
+): string[] {
+  const appActionIntents = intentMetadata.flatMap((intent) => {
+    const appAction = intent.android?.appAction;
+
+    if (!appAction) {
+      return [];
+    }
+
+    return [
+      `${intent.id}: ${appAction.capabilityName} (${appAction.fulfillment}, ${appAction.inventoryStrategy} inventory)`,
+    ];
+  });
+  const iosAppIntentIds = intentMetadata.flatMap((intent) =>
+    intent.ios?.appIntent ? [intent.id] : [],
+  );
+  const diagnostics: string[] = [];
+
+  if (appActionIntents.length > 0) {
+    diagnostics.push(`Android App Actions configured: ${appActionIntents.join("; ")}`);
+
+    if (!config.android?.manifest || !config.android?.shortcutsOutput) {
+      diagnostics.push(
+        "Android App Actions still need android.manifest and android.shortcutsOutput configured for Android artifact generation.",
+      );
+    } else {
+      diagnostics.push(
+        "Verified App Links, Play Console setup, and any Assistant review steps remain manual Android setup tasks.",
+      );
+    }
+  }
+
+  if (iosAppIntentIds.length > 0) {
+    diagnostics.push(`iOS App Intents configured: ${iosAppIntentIds.join("; ")}`);
+
+    if (!config.ios?.output) {
+      diagnostics.push(
+        "iOS App Intents still need ios.output configured for Swift artifact generation.",
+      );
+    } else {
+      diagnostics.push(
+        "Generated Siri/App Intent dialogs are static only in the current iOS slice; dynamic native dialog flows remain manual work.",
+      );
+    }
+  }
+
+  return diagnostics;
 }
 
 function resolveAndroidShortcutStringsOutput(
@@ -1119,6 +1367,7 @@ async function renderArtifacts(config: AppIntentsConfig, cwd: string): Promise<R
   const normalizedIntents = normalizeIntentDefinitions(intents);
   const normalizedEntities = normalizeReferencedEntities(intents);
   const artifacts: Array<GeneratedArtifact & { content: string }> = [];
+  const diagnostics = getAndroidDiagnostics(normalizedIntents, config);
 
   if (config.ios?.output) {
     artifacts.push({
@@ -1175,6 +1424,7 @@ async function renderArtifacts(config: AppIntentsConfig, cwd: string): Promise<R
 
   return {
     artifacts,
+    diagnostics,
     ...(androidManifest ? { androidManifest } : {}),
   };
 }
@@ -1206,6 +1456,7 @@ export async function generateAppIntents(
   return {
     artifacts: rendered.artifacts.map(({ content: _content, ...artifact }) => artifact),
     changed,
+    ...(rendered.diagnostics.length > 0 ? { diagnostics: rendered.diagnostics } : {}),
     message:
       options.check === true
         ? "Generated artifacts are up to date."

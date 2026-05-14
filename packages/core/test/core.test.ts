@@ -129,6 +129,171 @@ test("normalizeIntentDefinitions captures app shortcut icon metadata", () => {
   assert.equal(normalized?.appShortcut.iconSystemName, "shippingbox");
 });
 
+test("normalizeIntentDefinitions captures android app action metadata", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    params: {
+      orderNumber: p.string({
+        androidBiiParam: "order",
+      }),
+    },
+    android: {
+      appAction: {
+        capability: "actions.intent.GET_ORDER",
+        fulfillment: "deeplink",
+        inventory: {
+          strategy: "dynamic",
+        },
+      },
+    },
+  });
+
+  const [normalized] = normalizeIntentDefinitions([openOrder]);
+
+  assert.equal(normalized?.surfaces.assistant, true);
+  assert.equal(normalized?.android?.appAction?.capabilityName, "actions.intent.GET_ORDER");
+  assert.equal(normalized?.android?.appAction?.fulfillment, "deeplink");
+  assert.equal(normalized?.android?.appAction?.inventoryStrategy, "dynamic");
+});
+
+test("normalizeIntentDefinitions rejects assistant surface without android app action config", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    params: {},
+    surfaces: {
+      assistant: true,
+    },
+  });
+
+  assert.throws(
+    () => normalizeIntentDefinitions([openOrder]),
+    /surfaces\.assistant no longer enables Android App Actions by itself/,
+  );
+});
+
+test("normalizeIntentDefinitions captures ios app intent metadata", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    params: {
+      orderNumber: p.string(),
+    },
+    ios: {
+      appIntent: {
+        response: {
+          dialog: "Order opened.",
+        },
+      },
+    },
+  });
+
+  const [normalized] = normalizeIntentDefinitions([openOrder]);
+
+  assert.equal(normalized?.surfaces.siri, true);
+  assert.equal(normalized?.ios?.appIntent?.response?.dialog, "Order opened.");
+});
+
+test("normalizeIntentDefinitions rejects siri surface without ios app intent config", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    params: {},
+    surfaces: {
+      siri: true,
+    },
+  });
+
+  assert.throws(
+    () => normalizeIntentDefinitions([openOrder]),
+    /surfaces\.siri no longer enables iOS App Intents by itself/,
+  );
+});
+
+test("normalizeIntentDefinitions rejects dialog responses that open the app", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    params: {},
+    behavior: {
+      opensAppToForeground: true,
+    },
+    ios: {
+      appIntent: {
+        response: {
+          dialog: "Order opened.",
+        },
+      },
+    },
+  });
+
+  assert.throws(
+    () => normalizeIntentDefinitions([openOrder]),
+    /ios\.appIntent\.response\.dialog cannot be combined with behavior\.opensAppToForeground/,
+  );
+});
+
+test("normalizeIntentDefinitions rejects object params in phrases", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    phrases: ["Open ${shippingAddress} in ${.applicationName}"],
+    params: {
+      shippingAddress: p.object({
+        street: p.string(),
+      }),
+    },
+    surfaces: {
+      appShortcut: true,
+    },
+  });
+
+  assert.throws(
+    () => normalizeIntentDefinitions([openOrder]),
+    /cannot interpolate object parameter "shippingAddress"/,
+  );
+});
+
+test("normalizeIntentDefinitions validates required android app action parameters", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    params: {
+      orderNumber: p.string(),
+    },
+    android: {
+      appAction: {
+        capability: "actions.intent.GET_ORDER",
+      },
+    },
+  });
+
+  assert.throws(() => normalizeIntentDefinitions([openOrder]), /requires parameter "order"/);
+});
+
+test("normalizeIntentDefinitions rejects unsupported android app action parameters", () => {
+  const openOrder = defineIntent({
+    id: "openOrder",
+    title: "Open Order",
+    params: {
+      orderNumber: p.string({
+        androidBiiParam: "orderNumber",
+      }),
+    },
+    android: {
+      appAction: {
+        capability: "actions.intent.GET_ORDER",
+      },
+    },
+  });
+
+  assert.throws(
+    () => normalizeIntentDefinitions([openOrder]),
+    /does not support parameter "orderNumber"/,
+  );
+});
+
 test("normalizeReferencedEntities discovers entity dependencies from intent params", () => {
   const Order = defineEntity({
     id: "Order",

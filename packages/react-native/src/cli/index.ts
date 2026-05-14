@@ -100,6 +100,11 @@ export async function runCli(
     });
 
     io.stdout(result.message);
+
+    for (const diagnostic of result.diagnostics ?? []) {
+      io.stdout(diagnostic);
+    }
+
     return 0;
   } catch (error) {
     io.stderr(error instanceof Error ? error.message : String(error));
