@@ -204,7 +204,9 @@ To use a different config file, pass `configPath`:
 In Expo prebuilds, configured `ios.output`, `android.manifest`,
 `android.shortcutsOutput`, and `android.shortcutsStringsOutput` paths are honored
 relative to the app root. If `ios.output` does not start with `ios/`, it is
-written under the generated iOS project folder.
+written under the generated iOS project folder. The generated Android manifest
+also ensures `MainActivity` uses a foreground-intent-compatible launch mode for
+Assistant/App Action deep links.
 
 ### Custom shortcut icons with `expo-asset`
 
@@ -271,7 +273,7 @@ only; Expo-bundled PNG assets are not used there.
 - Generated TypeScript event types.
 - Runtime helpers for initial intents, warm intent events, intent URL parsing/building, donations,
   donation clearing, and dynamic shortcuts.
-- Expo prebuild plugin for iOS codegen, URL scheme setup, app group entitlements, and quick-action forwarding.
+- Expo prebuild plugin for iOS codegen, URL scheme setup, app group entitlements, quick-action forwarding, and Android foreground deep-link manifest setup.
 - Bare React Native iOS and Android native modules.
 
 ## Planned features

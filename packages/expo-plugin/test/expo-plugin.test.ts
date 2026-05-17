@@ -331,9 +331,12 @@ test("expo plugin config drives codegen on expo-style paths", async () => {
     await access(join(cwd, "ios/Generated/ExpoAppIntents.swift"));
     await access(join(cwd, "android/app/src/main/res/values/expo_shortcuts_strings.xml"));
     const generatedTypes = await readFile(join(cwd, "src/generated/app-intents.d.ts"), "utf8");
+    const generatedManifest = await readFile(join(cwd, "android/app/src/main/AndroidManifest.xml"), "utf8");
 
     assert.equal(result.artifacts.length, 4);
     assert.match(generatedTypes, /GeneratedAppIntentEvent/);
+    assert.match(generatedManifest, /android:launchMode="singleTask"/);
+    assert.match(generatedManifest, /android:scheme="expoexample"/);
   } finally {
     await rm(cwd, { force: true, recursive: true });
   }

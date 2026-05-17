@@ -190,6 +190,7 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
     assert.match(generatedTypes, /checkDelivery: ParamsOf<typeof Intent0>/);
     assert.match(generatedTypes, /openSavedOrder: ParamsOf<typeof Intent2>/);
     assert.match(generatedManifest, /android\.app\.shortcuts/);
+    assert.match(generatedManifest, /android:launchMode="singleTask"/);
     assert.match(generatedManifest, /android:scheme="example"/);
 
     const checkResult = await generateAppIntents(config, { check: true, cwd });

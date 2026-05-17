@@ -1309,11 +1309,27 @@ function ensureAndroidManifest(manifest: string, config: AppIntentsConfig): stri
 
   let updatedManifest = manifest;
   const shortcutsResourceName = basename(config.android.shortcutsOutput, ".xml");
+  const mainActivityTag = updatedManifest.match(
+    /<activity[\s\S]*?android:name="\.MainActivity"[\s\S]*?(?:\/>|>)/,
+  )?.[0];
 
   if (!updatedManifest.includes('android:name="android.app.shortcuts"')) {
     updatedManifest = updatedManifest.replace(
       /<application([^>]*)>/,
       `<application$1>\n      <meta-data\n        android:name="android.app.shortcuts"\n        android:resource="@xml/${shortcutsResourceName}" />`,
+    );
+  }
+
+  if (
+    mainActivityTag &&
+    !mainActivityTag.includes('android:launchMode="singleTask"') &&
+    !mainActivityTag.includes('android:launchMode="singleTop"') &&
+    !mainActivityTag.includes("android:launchMode=")
+  ) {
+    const tagEnding = mainActivityTag.endsWith("/>") ? "/>" : ">";
+    updatedManifest = updatedManifest.replace(
+      mainActivityTag,
+      `${mainActivityTag.slice(0, -tagEnding.length)}\n        android:launchMode="singleTask"${tagEnding}`,
     );
   }
 

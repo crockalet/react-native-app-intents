@@ -274,6 +274,7 @@ The plugin currently:
 - runs codegen with Expo-derived native paths
 - patches `Info.plist` for the URL scheme and optional Siri/app-group settings
 - patches entitlements when `ios.appGroupIdentifier` is configured
+- patches the Android manifest so `MainActivity` can receive foreground deep links
 - injects iOS home-screen quick-action forwarding into `AppDelegate.swift`
 - adds the generated Swift source file to the Xcode project
 
@@ -315,8 +316,9 @@ private func handleShortcutItem(_ shortcutItem: UIApplicationShortcutItem) -> Bo
 }
 ```
 
-Android deep links are routed through the generated manifest intent filters and the native module's
-pending URL queue.
+Android deep links are routed through the generated manifest intent filters and,
+when the app is already open, through the main activity's foreground-intent
+launch mode into React Native's `onNewIntent` handling.
 
 ## Handle intents at runtime
 
@@ -476,7 +478,7 @@ RN_APP_INTENTS_ANDROID_E2E=1 bun test packages/react-native/test/android-app-act
 - Initial intent and warm intent event handling in JavaScript.
 - Dynamic home-screen shortcuts on iOS and Android.
 - Intent donation and donation-clearing helpers.
-- Expo prebuild plugin and bare React Native native modules.
+- Expo prebuild plugin with iOS/native manifest automation and bare React Native native modules.
 
 ## Planned features
 

@@ -103,7 +103,9 @@ To use a different config file, pass `configPath`:
 In Expo prebuilds, configured `ios.output`, `android.manifest`,
 `android.shortcutsOutput`, and `android.shortcutsStringsOutput` paths are honored
 relative to the app root. If `ios.output` does not start with `ios/`, it is
-written under the generated iOS project folder.
+written under the generated iOS project folder. The generated Android manifest
+also ensures `MainActivity` uses a foreground-intent-compatible launch mode for
+Assistant/App Action deep links.
 
 ### Custom shortcut icons with `expo-asset`
 
