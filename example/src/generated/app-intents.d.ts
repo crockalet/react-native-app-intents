@@ -3,12 +3,32 @@ import type { IntentEventUnion, ParamsOf } from "@crockalet/react-native-app-int
 import { openOrder as Intent0 } from "../orders.intents.js";
 import { openSavedOrder as Intent1 } from "../orders.intents.js";
 
+/**
+ * Generated intent definitions in codegen discovery order.
+ */
 export declare const generatedAppIntents: readonly [typeof Intent0, typeof Intent1];
 
+/**
+ * Maps each generated intent id to its typed params object.
+ */
 export interface GeneratedAppIntentMap {
+  /**
+   * Open Order
+   * Open a specific order by number.
+   */
   openOrder: ParamsOf<typeof Intent0>;
+  /**
+   * Open Saved Order
+   * Open a saved order from inventory.
+   */
   openSavedOrder: ParamsOf<typeof Intent1>;
 }
 
+/**
+ * Union of generated intent ids.
+ */
 export type GeneratedAppIntentId = keyof GeneratedAppIntentMap;
+/**
+ * Discriminated union of generated intent events.
+ */
 export type GeneratedAppIntentEvent = IntentEventUnion<typeof generatedAppIntents>;

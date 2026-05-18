@@ -187,6 +187,18 @@ test("generateAppIntents writes bare RN artifacts from intent definitions", asyn
       /<string name="react_native_app_intents_open_saved_order_order_1_short_label">Order #1234<\/string>/,
     );
     assert.match(generatedTypes, /GeneratedAppIntentEvent/);
+    assert.match(
+      generatedTypes,
+      /\/\*\*\n \* Generated intent definitions in codegen discovery order\.\n \*\//,
+    );
+    assert.match(
+      generatedTypes,
+      /\/\*\*\n   \* Check Delivery\n   \*\/\n  checkDelivery: ParamsOf<typeof Intent0>/,
+    );
+    assert.match(
+      generatedTypes,
+      /\/\*\*\n   \* Open Saved Order\n   \* Open a saved order\.\n   \*\/\n  openSavedOrder: ParamsOf<typeof Intent2>/,
+    );
     assert.match(generatedTypes, /checkDelivery: ParamsOf<typeof Intent0>/);
     assert.match(generatedTypes, /openSavedOrder: ParamsOf<typeof Intent2>/);
     assert.match(generatedManifest, /android\.app\.shortcuts/);
