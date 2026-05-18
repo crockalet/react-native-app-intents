@@ -1855,7 +1855,7 @@ PODS:
     - React-perflogger (= 0.85.3)
     - React-utils (= 0.85.3)
     - ReactNativeDependencies
-  - ReactNativeAppIntents (0.0.0):
+  - ReactNativeAppIntents (0.1.5):
     - React-Core
   - ReactNativeDependencies (0.85.3)
   - Yoga (0.0.0)
@@ -2168,7 +2168,7 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: 25c9c516839be2c5e3d3344f95dc7da5f7e63fc2
   ReactCodegen: dc5c6ca0807830bc51a7576db31e8a4b340349c8
   ReactCommon: 7dfc3250793bf36cf221096ff59e1179e13eef7f
-  ReactNativeAppIntents: e38c1e947dfb0984486c949d8cf972e59a7d6e6c
+  ReactNativeAppIntents: e833aec6d1464b68bb1d1c1405bcef0e8f3c7b56
   ReactNativeDependencies: edad5164348324a1afa408b3d4564667fdf21ceb
   Yoga: 77dfa8673de2874e1855002ae59c68b8be9b007b
 
